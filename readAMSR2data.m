@@ -42,6 +42,7 @@ function out = readAMSR2data(daystr)
 startup_plotting; 
 movie = false;
 cplots= false;
+plotting = false;
 %% load data
 % load AMSR2
 % this is for NorthWestPassage
@@ -62,35 +63,40 @@ for i=1:length(daystr)
     dy = diff(d.latgrid); dy = [dy;dy(end,:)];
 
     % prepare for plotting sea ice conc
-    figure(1);set(gcf, 'Color','white');
-    %POLARSTEREO_FWD transforms lat/lon data to map coordinates for a polar stereographic system
-    %[X,Y]=POLARSTEREO_FWD(LAT,LONG,EARTHRADIUS,ECCENTRICITY,LAT_TRUE,LON_POSY) 
-    axis tight manual
-    % getm('MapProjection') for the various projections
-    ax = gca;
-    %ax = axesm('MapProjection','mercator');
-    ax.NextPlot = 'replaceChildren';
-    hold all;
-    colormap cool
-    surf((d.longrid),(d.latgrid),(d.iceconc),'FaceColor','interp',...
-         'EdgeColor','none');
-    caxis([0 100]);
-    axis([-180 -100 70 85 0 100]);grid off;
-    set(gca,'Ytick',70:2.5:85);
-    set(gca,'YTickLabel',{'70.0','72.5','75.0',...
-        '77.5','80.0','82.5','85.0'});
-    xlabel('Longitude','FontSize',12);ylabel('Latitude','FontSize',12);
-    title(daystr{:,i});
-    cb=colorbarlabeled('Sea Ice [%]');
-    set(gca,'FontSize',12);
-    view(2)
+    if plotting
+        figure(1);set(gcf, 'Color','white');
+        %POLARSTEREO_FWD transforms lat/lon data to map coordinates for a polar stereographic system
+        %[X,Y]=POLARSTEREO_FWD(LAT,LONG,EARTHRADIUS,ECCENTRICITY,LAT_TRUE,LON_POSY) 
+        axis tight manual
+        % getm('MapProjection') for the various projections
+        ax = gca;
+        %ax = axesm('MapProjection','mercator');
+        ax.NextPlot = 'replaceChildren';
+        hold all;
+        colormap cool
+        surf((d.longrid),(d.latgrid),(d.iceconc),'FaceColor','interp',...
+             'EdgeColor','none');
+        caxis([0 100]);
+        axis([-180 -100 70 85 0 100]);grid off;
+        set(gca,'Ytick',70:2.5:85);
+        set(gca,'YTickLabel',{'70.0','72.5','75.0',...
+            '77.5','80.0','82.5','85.0'});
+        xlabel('Longitude','FontSize',12);ylabel('Latitude','FontSize',12);
+        title(daystr{:,i});
+        cb=colorbarlabeled('Sea Ice [%]');
+        set(gca,'FontSize',12);
+        view(2)
+        
+        % save figure
+        
+        fi=[strcat(adir, daystr{:,i}, 'seaIceConc')];
+        save_fig(1,fi,false);
+    end
+    
     if movie
         mov(i) = getframe(gcf);
     end
-    % save figure
-    % consider preparing a movie from existing images
-    fi=[strcat(adir, daystr{:,i}, 'seaIceConc')];
-    save_fig(1,fi,false);
+    
     
     % create gradient
     %[px,py] = gradient(d.iceconc,d.longrid,d.longrid);

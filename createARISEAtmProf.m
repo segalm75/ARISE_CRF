@@ -40,132 +40,184 @@
 %                 created repo, test
 %                 added probe .ice file read
 %                 test
+%                 change version set to v1.1 due to probe data addition
 % -------------------------------------------------------------------------
 %% function routine
 function out = createARISEAtmProf
-version_set('1.0');
+version_set('1.1');
 startup_plotting;
 %compare = 'false'; % defualt is false
 %% choose input directory or file
 % ------------------------------ %
-infile = getfullname__('arise-C130-Hskping_c130_*.ict','F:','Select a met ict* files directory');
-[dirn, fname, ext] = fileparts(infile);
- dirn = [dirn, filesep];
+% air data
+airinfile = getfullname__('arise-C130-Hskping_c130_*.ict','F:','Select a met ict* files directory');
+[airdir, fname, ext] = fileparts(airinfile);
+ airdir = [airdir, filesep];
+ air_files = dir([airdir,'arise-C130-Hskping_c130_*.ict']);
+ % in-situ probe data
+ isinfile = getfullname__('*Probes.csv','F:','Select probes ict* files directory');
+[isdir, fname, ext] = fileparts(isinfile);
+ isdir = [isdir, filesep];
+ is_files = dir([isdir,'*Probes.csv']);
+ %4star data
+ starinfile = getfullname__('*star.mat','F:','Select star.mat files directory');
+[stardir, fname, ext] = fileparts(starinfile);
+ stardir = [stardir, filesep];
+ star_files = dir([stardir,'*star.mat']);
 
-allfiles = dir([dirn,'arise-C130-Hskping_c130_*.ict']);
 % read all data
-    for i=1:length(allfiles)
-        dm{i} = strsplit(allfiles(i).name,'_');
+    for i=1:length(air_files)
+        dm{i} = strsplit(air_files(i).name,'_');
         dates(i) = dm{:,i}(2);
-        tmp=ictread([dirn allfiles(i).name]);
-        air.(strcat('met',dates{:,i},'_')).UTCsec        = tmp.Start_UTC;
-        air.(strcat('met',dates{:,i},'_')).UTChr         =(air.(strcat('met',dates{:,i},'_')).UTCsec/86400)*24;
-        air.(strcat('met',dates{:,i},'_')).longitude     = tmp.Longitude;
-        air.(strcat('met',dates{:,i},'_')).latitude      = tmp.Latitude;
-        air.(strcat('met',dates{:,i},'_')).GPS_Altitude  = tmp.GPS_Altitude;%[m]
-        air.(strcat('met',dates{:,i},'_')).Pst_Altitude  = tmp.Pressure_Altitude;%[ft]
-        air.(strcat('met',dates{:,i},'_')).Static_AirT   = tmp.Static_Air_Temp;%[C]
-        air.(strcat('met',dates{:,i},'_')).poten_Temp    = tmp.Potential_Temp;%[K]
-        air.(strcat('met',dates{:,i},'_')).DewPoint      = tmp.Dew_Point_3Stage;%[C]
-        air.(strcat('met',dates{:,i},'_')).TotalT        = tmp.Total_Air_Temp;%[C]
-        air.(strcat('met',dates{:,i},'_')).IRsurfT       = tmp.IR_Surf_Temp;%[C]
-        air.(strcat('met',dates{:,i},'_')).StaticP       = tmp.Static_Pressure;%[mbar]
-        air.(strcat('met',dates{:,i},'_')).WindS         = tmp.Wind_Speed;%[m/s]
-        air.(strcat('met',dates{:,i},'_')).WindD         = tmp.Wind_Direction;%deg[0-360]
-        air.(strcat('met',dates{:,i},'_')).SZA           = tmp.Solar_Zenith_Angle;
-        air.(strcat('met',dates{:,i},'_')).MMR           = tmp.Mixing_Ratio;%[g/kg]
-        air.(strcat('met',dates{:,i},'_')).PartPwater    = tmp.Part_Press_Water_Vapor;%[mbar]
-        air.(strcat('met',dates{:,i},'_')).SatVPwater    = tmp.Sat_Vapor_Press_H2O;%[mbar]
-        air.(strcat('met',dates{:,i},'_')).SatVPice      = tmp.Sat_Vapor_Press_Ice;%[mbar]
-        air.(strcat('met',dates{:,i},'_')).RH            = tmp.Relative_Humidity;  %[%] 
+        dates_str = strcat('met',dates{:,i},'_');
+        tmp =ictread([airdir air_files(i).name]);        % air data    
+        air.(dates_str).UTCsec        = tmp.Start_UTC;
+        air.(dates_str).UTChr         =(air.(dates_str).UTCsec/86400)*24;
+        air.(dates_str).longitude     = tmp.Longitude;
+        air.(dates_str).latitude      = tmp.Latitude;
+        air.(dates_str).GPS_Altitude  = tmp.GPS_Altitude;%[m]
+        air.(dates_str).Pst_Altitude  = tmp.Pressure_Altitude;%[ft]
+        air.(dates_str).Static_AirT   = tmp.Static_Air_Temp;%[C]
+        air.(dates_str).poten_Temp    = tmp.Potential_Temp;%[K]
+        air.(dates_str).DewPoint      = tmp.Dew_Point_3Stage;%[C]
+        air.(dates_str).TotalT        = tmp.Total_Air_Temp;%[C]
+        air.(dates_str).IRsurfT       = tmp.IR_Surf_Temp;%[C]
+        air.(dates_str).StaticP       = tmp.Static_Pressure;%[mbar]
+        air.(dates_str).WindS         = tmp.Wind_Speed;%[m/s]
+        air.(dates_str).WindD         = tmp.Wind_Direction;%deg[0-360]
+        air.(dates_str).SZA           = tmp.Solar_Zenith_Angle;
+        air.(dates_str).MMR           = tmp.Mixing_Ratio;%[g/kg]
+        air.(dates_str).PartPwater    = tmp.Part_Press_Water_Vapor;%[mbar]
+        air.(dates_str).SatVPwater    = tmp.Sat_Vapor_Press_H2O;%[mbar]
+        air.(dates_str).SatVPice      = tmp.Sat_Vapor_Press_Ice;%[mbar]
+        air.(dates_str).RH            = tmp.Relative_Humidity;  %[%] 
         clear tmp;
+        
+        tmp=csvread([isdir  is_files(i).name]);          % probes data
+        % interpolate params to air time
+        is_params = [5:9 14 18 23 30 35 40 45];%{'TWC_gm3','LWC1_gm3','LWC2_gm3','PWV_cm','LWP_mm','nCDP_cm3','CDP03_dNdlogD','CDP08_dNdlogD','CDP15_dNdlogD','CDP20_dNdlogD','CDP25_dNdlogD','CDP30_dNdlogD'};
+        is_labels = {'TWC_gm3','LWC1_gm3','LWC2_gm3','PWV_cm','LWP_mm','nCDP_cm3','CDP05um',...
+                     'CDP10um','CDP20um','CDP30um','CDP40um','CDP50um'};
+        %CDP03_dNdlogD% cm-3; 5um
+        %CDP08_dNdlogD% cm-3; 10um
+        %CDP15_dNdlogD% cm-3; 20 um
+        %CDP20_dNdlogD% cm-3; 30um
+        %CDP25_dNdlogD% cm-3; 40um
+        %CDP30_dNdlogD% cm-3; 50um
+        for kk=1:length(is_labels)
+                air.(dates_str).(is_labels{:,kk}) = ...
+                     interp1(24*(tmp(:,1)/86400),tmp(:,is_params(kk)),...
+                     air.(dates_str).UTChr,'nearest');
+        end
+        clear tmp;
+        % load 4star
+        s=load([stardir  star_files(i).name]);           % 4star data
+        utc_range = [air.(dates_str).UTChr(1),...
+                     air.(dates_str).UTChr(end)];
+        star=combine_star_params(s,utc_range);
+        clear s;
+        star_params = {'Str','Md'}; star_labels = {'starStr','starMd'};
+        if length(star.utc)~=length(unique(star.utc))
+            star.utc = star.utc + (([1:length(star.utc)])*1e-12)';
+        end
+        for kk=1:length(star_params)
+                air.(dates_str).(star_labels{:,kk}) = ...
+                     interp1(star.utc,star.(star_params{:,kk}),...
+                     air.(dates_str).UTChr,'nearest');
+        end
     end
     
 %% create vertical profiles
 Tempmov(length(dates)) = struct('cdata',[],'colormap',[]);
 RHmov(length(dates))   = struct('cdata',[],'colormap',[]);
-for i=1:length(allfiles)
-    
+for i=1:length(air_files)
+    dates_str = strcat('met',dates{:,i},'_');
     % plot flight altitude
-    figure(998);plot(air.(strcat('met',dates{:,i},'_')).latitude,...
-                air.(strcat('met',dates{:,i},'_')).GPS_Altitude,'-b');
+    figure(998);plot(air.(dates_str).latitude,...
+                air.(dates_str).GPS_Altitude,'-b');
            xlabel('latitude');ylabel('Altitude [m]');title(dates{:,i});
-    figure(999);plot(air.(strcat('met',dates{:,i},'_')).UTChr,...
-                air.(strcat('met',dates{:,i},'_')).latitude,'-b');
+    figure(999);plot(air.(dates_str).UTChr,...
+                air.(dates_str).latitude,'-b');
            xlabel('time [UThr]');ylabel('latitude');title(dates{:,i});
-    figure(1000);plot(air.(strcat('met',dates{:,i},'_')).UTChr,...
-                air.(strcat('met',dates{:,i},'_')).GPS_Altitude,'-b');
+    figure(1000);plot(air.(dates_str).UTChr,...
+                air.(dates_str).GPS_Altitude,'-b');
            xlabel('time [UThr]');ylabel('Altitude [m]');title(dates{:,i});
     % form separate profiles
     profnum = input('input number of profiles');
     for j=1:profnum
-        disp('choose bottom to top points')
-        prof = ginput(2);
-        if prof(2,1)-prof(1,1)>0
-            air.(strcat('met',dates{:,i},'_')).(strcat('profnum',num2str(j))).direction = 'ascend';
-            ut1 = prof(1,1);
-            ut2 = prof(2,1);
-        else
-            air.(strcat('met',dates{:,i},'_')).(strcat('profnum',num2str(j))).direction = 'descend';
-            ut1 = prof(2,1);
-            ut2 = prof(1,1);
-        end
-        air.(strcat('met',dates{:,i},'_')).(strcat('profnum',num2str(j))).lon    =...
-             air.(strcat('met',dates{:,i},'_')).longitude(air.(strcat('met',dates{:,i},'_')).UTChr<=ut2 &...
-                                                             air.(strcat('met',dates{:,i},'_')).UTChr>=ut1);
-        air.(strcat('met',dates{:,i},'_')).(strcat('profnum',num2str(j))).lat    =...
-             air.(strcat('met',dates{:,i},'_')).latitude(air.(strcat('met',dates{:,i},'_')).UTChr<=ut2 &...
-                                                             air.(strcat('met',dates{:,i},'_')).UTChr>=ut1);
-        air.(strcat('met',dates{:,i},'_')).(strcat('profnum',num2str(j))).z    =...
-             air.(strcat('met',dates{:,i},'_')).GPS_Altitude(air.(strcat('met',dates{:,i},'_')).UTChr<=ut2 &...
-                                                             air.(strcat('met',dates{:,i},'_')).UTChr>=ut1);
-        air.(strcat('met',dates{:,i},'_')).(strcat('profnum',num2str(j))).time =...
-             air.(strcat('met',dates{:,i},'_')).UTChr(air.(strcat('met',dates{:,i},'_')).UTChr<=ut2 &...
-                                                             air.(strcat('met',dates{:,i},'_')).UTChr>=ut1);
-        air.(strcat('met',dates{:,i},'_')).(strcat('profnum',num2str(j))).Static_AirT =...
-             air.(strcat('met',dates{:,i},'_')).Static_AirT(air.(strcat('met',dates{:,i},'_')).UTChr<=ut2 &...
-                                                             air.(strcat('met',dates{:,i},'_')).UTChr>=ut1);
-        air.(strcat('met',dates{:,i},'_')).(strcat('profnum',num2str(j))).theta =...
-             air.(strcat('met',dates{:,i},'_')).poten_Temp(air.(strcat('met',dates{:,i},'_')).UTChr<=ut2 &...
-                                                             air.(strcat('met',dates{:,i},'_')).UTChr>=ut1);
-        air.(strcat('met',dates{:,i},'_')).(strcat('profnum',num2str(j))).DewPoint =...
-             air.(strcat('met',dates{:,i},'_')).DewPoint(air.(strcat('met',dates{:,i},'_')).UTChr<=ut2 &...
-                                                             air.(strcat('met',dates{:,i},'_')).UTChr>=ut1);
-        air.(strcat('met',dates{:,i},'_')).(strcat('profnum',num2str(j))).staticP =...
-             air.(strcat('met',dates{:,i},'_')).StaticP(air.(strcat('met',dates{:,i},'_')).UTChr<=ut2 &...
-                                                             air.(strcat('met',dates{:,i},'_')).UTChr>=ut1);
-        air.(strcat('met',dates{:,i},'_')).(strcat('profnum',num2str(j))).MMR =...
-             air.(strcat('met',dates{:,i},'_')).MMR(air.(strcat('met',dates{:,i},'_')).UTChr<=ut2 &...
-                                                             air.(strcat('met',dates{:,i},'_')).UTChr>=ut1);
-        air.(strcat('met',dates{:,i},'_')).(strcat('profnum',num2str(j))).RH =...
-             air.(strcat('met',dates{:,i},'_')).RH(air.(strcat('met',dates{:,i},'_')).UTChr<=ut2 &...
-                                                             air.(strcat('met',dates{:,i},'_')).UTChr>=ut1);
-        air.(strcat('met',dates{:,i},'_')).(strcat('profnum',num2str(j))).meanlon = ...
-                             nanmean(air.(strcat('met',dates{:,i},'_')).(strcat('profnum',num2str(j))).lon);
-        air.(strcat('met',dates{:,i},'_')).(strcat('profnum',num2str(j))).meanlat = ...
-                             nanmean(air.(strcat('met',dates{:,i},'_')).(strcat('profnum',num2str(j))).lat);
-    
-    
-    % compare with reanalysis
-    
-%         if strcmp(compare,'true')
-%             reana = readMERRA(0,'false');
-%             % choose closest profile
-%             %nm_340 = interp1(vis.nm,[1:length(vis.nm)],340.0, 'nearest');
-%             air.(strcat('met',dates{:,i},'_')).(strcat('reanum',num2str(j))) = reana;
-%         end
+                prof_str = strcat('profnum',num2str(j));
+                disp('choose bottom to top points')
+                prof = ginput(2);
+                if prof(2,1)-prof(1,1)>0
+                    air.(dates_str).(prof_str).direction = 'ascend';
+                    ut1 = prof(1,1);
+                    ut2 = prof(2,1);
+                else
+                    air.(dates_str).(prof_str).direction = 'descend';
+                    ut1 = prof(2,1);
+                    ut2 = prof(1,1);
+                end
+                air.(dates_str).(prof_str).lon    =...
+                     air.(dates_str).longitude(air.(dates_str).UTChr<=ut2 &...
+                                                                     air.(dates_str).UTChr>=ut1);
+                air.(dates_str).(prof_str).lat    =...
+                     air.(dates_str).latitude(air.(dates_str).UTChr<=ut2 &...
+                                                                     air.(dates_str).UTChr>=ut1);
+                air.(dates_str).(prof_str).z    =...
+                     air.(dates_str).GPS_Altitude(air.(dates_str).UTChr<=ut2 &...
+                                                                     air.(dates_str).UTChr>=ut1);
+                air.(dates_str).(prof_str).time =...
+                     air.(dates_str).UTChr(air.(dates_str).UTChr<=ut2 &...
+                                                                     air.(dates_str).UTChr>=ut1);
+                air.(dates_str).(prof_str).Static_AirT =...
+                     air.(dates_str).Static_AirT(air.(dates_str).UTChr<=ut2 &...
+                                                                     air.(dates_str).UTChr>=ut1);
+                air.(dates_str).(prof_str).theta =...
+                     air.(dates_str).poten_Temp(air.(dates_str).UTChr<=ut2 &...
+                                                                     air.(dates_str).UTChr>=ut1);
+                air.(dates_str).(prof_str).DewPoint =...
+                     air.(dates_str).DewPoint(air.(dates_str).UTChr<=ut2 &...
+                                                                     air.(dates_str).UTChr>=ut1);
+                air.(dates_str).(prof_str).staticP =...
+                     air.(dates_str).StaticP(air.(dates_str).UTChr<=ut2 &...
+                                                                     air.(dates_str).UTChr>=ut1);
+                air.(dates_str).(prof_str).MMR =...
+                     air.(dates_str).MMR(air.(dates_str).UTChr<=ut2 &...
+                                                                     air.(dates_str).UTChr>=ut1);
+                air.(dates_str).(prof_str).RH =...
+                     air.(dates_str).RH(air.(dates_str).UTChr<=ut2 &...
+                                                                     air.(dates_str).UTChr>=ut1);
+                air.(dates_str).(prof_str).starStr =...
+                     air.(dates_str).starStr(air.(dates_str).UTChr<=ut2 &...
+                                                                     air.(dates_str).UTChr>=ut1);
+                air.(dates_str).(prof_str).starMd =...
+                     air.(dates_str).starMd(air.(dates_str).UTChr<=ut2 &...
+                                                                     air.(dates_str).UTChr>=ut1);
+                                                                 
+                % assimilate in-situ data into profile
+                for kk=1:length(is_labels)
+                        air.(dates_str).(prof_str).(is_labels{:,kk}) = ...
+                        air.(dates_str).(is_labels{:,kk})(air.(dates_str).UTChr<=ut2 &...
+                                                          air.(dates_str).UTChr>=ut1);
+                end
+                                                                 
+                % mean profile location
+                air.(dates_str).(prof_str).meanlon = ...
+                nanmean(air.(dates_str).(prof_str).lon);
+                air.(dates_str).(strcat('profnum',num2str(j))).meanlat = ...
+                nanmean(air.(dates_str).(prof_str).lat);
     
     end
     % average profiles
-    [binnedprof] = bin_profiles(air.(strcat('met',dates{:,i},'_')),profnum);
-    air.(strcat('met',dates{:,i},'_')).prof = binnedprof;
+    [binnedprof] = bin_profiles(air.(dates_str),profnum);
+    air.(dates_str).prof = binnedprof;
     % plot avg and std profiles for each day
     fh = figure(i);
     % pressure
     ax(1) = subplot(2,2,1);
-    plot(air.(strcat('met',dates{:,i},'_')).prof.Pmean,air.(strcat('met',dates{:,i},'_')).prof.zmean/1000,'-b',...
-         air.(strcat('met',dates{:,i},'_')).prof.Pmean + air.(strcat('met',dates{:,i},'_')).prof.Pstd,air.(strcat('met',dates{:,i},'_')).prof.zmean/1000,'--b',...
-         air.(strcat('met',dates{:,i},'_')).prof.Pmean - air.(strcat('met',dates{:,i},'_')).prof.Pstd,air.(strcat('met',dates{:,i},'_')).prof.zmean/1000,'--b','linewidth',2);
+    plot(air.(dates_str).prof.Pmean,air.(dates_str).prof.zmean/1000,'-b',...
+         air.(dates_str).prof.Pmean + air.(dates_str).prof.Pstd,air.(dates_str).prof.zmean/1000,'--b',...
+         air.(dates_str).prof.Pmean - air.(dates_str).prof.Pstd,air.(dates_str).prof.zmean/1000,'--b','linewidth',2);
     xlabel('Pressure [mbar]');
     ylabel('Altitude [km]');
     text(410,1,dates{:,i});
@@ -173,27 +225,27 @@ for i=1:length(allfiles)
     legend('mean','std');grid on;
     % temperature
     ax(2) = subplot(2,2,2);
-    plot(air.(strcat('met',dates{:,i},'_')).prof.Tmean,air.(strcat('met',dates{:,i},'_')).prof.zmean/1000,'-r',...
-         air.(strcat('met',dates{:,i},'_')).prof.Tmean + air.(strcat('met',dates{:,i},'_')).prof.Tstd,air.(strcat('met',dates{:,i},'_')).prof.zmean/1000,'--r',...
-         air.(strcat('met',dates{:,i},'_')).prof.Tmean - air.(strcat('met',dates{:,i},'_')).prof.Tstd,air.(strcat('met',dates{:,i},'_')).prof.zmean/1000,'--r','linewidth',2);
+    plot(air.(dates_str).prof.Tmean,air.(dates_str).prof.zmean/1000,'-r',...
+         air.(dates_str).prof.Tmean + air.(dates_str).prof.Tstd,air.(dates_str).prof.zmean/1000,'--r',...
+         air.(dates_str).prof.Tmean - air.(dates_str).prof.Tstd,air.(dates_str).prof.zmean/1000,'--r','linewidth',2);
     xlabel('Temperature [C]');
     set(ax(2),'YTickLabel',{''})
     axis([-40 5 0 7]);
     legend('mean','std');grid on;
     % mixing ratio
     ax(3) = subplot(2,2,3);
-    plot(air.(strcat('met',dates{:,i},'_')).prof.MMRmean,air.(strcat('met',dates{:,i},'_')).prof.zmean/1000,'-c',...
-         air.(strcat('met',dates{:,i},'_')).prof.MMRmean + air.(strcat('met',dates{:,i},'_')).prof.MMRstd,air.(strcat('met',dates{:,i},'_')).prof.zmean/1000,'--c',...
-         air.(strcat('met',dates{:,i},'_')).prof.MMRmean - air.(strcat('met',dates{:,i},'_')).prof.MMRstd,air.(strcat('met',dates{:,i},'_')).prof.zmean/1000,'--c','linewidth',2);
+    plot(air.(dates_str).prof.MMRmean,air.(dates_str).prof.zmean/1000,'-c',...
+         air.(dates_str).prof.MMRmean + air.(dates_str).prof.MMRstd,air.(dates_str).prof.zmean/1000,'--c',...
+         air.(dates_str).prof.MMRmean - air.(dates_str).prof.MMRstd,air.(dates_str).prof.zmean/1000,'--c','linewidth',2);
     xlabel('water vapor mixing ratio [g/kg]');
     ylabel('Altitude [km]');
     axis([0 0.4 0 7]);
     legend('mean','std');grid on;
     % relative humidity
     ax(4) = subplot(2,2,4);
-    plot(air.(strcat('met',dates{:,i},'_')).prof.RHmean,air.(strcat('met',dates{:,i},'_')).prof.zmean/1000,'-g',...
-         air.(strcat('met',dates{:,i},'_')).prof.RHmean + air.(strcat('met',dates{:,i},'_')).prof.RHstd,air.(strcat('met',dates{:,i},'_')).prof.zmean/1000,'--g',...
-         air.(strcat('met',dates{:,i},'_')).prof.RHmean - air.(strcat('met',dates{:,i},'_')).prof.RHstd,air.(strcat('met',dates{:,i},'_')).prof.zmean/1000,'--g','linewidth',2);
+    plot(air.(dates_str).prof.RHmean,air.(dates_str).prof.zmean/1000,'-g',...
+         air.(dates_str).prof.RHmean + air.(dates_str).prof.RHstd,air.(dates_str).prof.zmean/1000,'--g',...
+         air.(dates_str).prof.RHmean - air.(dates_str).prof.RHstd,air.(dates_str).prof.zmean/1000,'--g','linewidth',2);
     xlabel('relative humidity [%]');
     set(ax(4),'YTickLabel',{''});
     set(ax(4),'XTick',[0:20:100]);
@@ -212,7 +264,7 @@ for i=1:length(allfiles)
      p4(1) = p3(1) + p3(3) +p3(3)/8;
      set(ax(2), 'position', p2)
      set(ax(4), 'position', p4);
-     fi=[strcat(dirn, dates{:,i}, 'dailymeanProfiles4subplot')];
+     fi=[strcat(airdir, dates{:,i}, 'dailymeanProfiles4subplot')];
      save_fig(i,fi,false);
      close 1000;
      close(fh);
@@ -265,8 +317,8 @@ movie2avi(RHmov, 'ARISEmeanRHprof.avi', 'compression','None', 'fps',1);
 winopen('ARISEmeanRHprof.avi');
 
 %% save processed air struct for all flights
-disp(strcat('saving',dirn,'ARISEairprocessed.mat'));
-save([dirn,'ARISEairprocessed.mat'],'-struct','air');
+disp(strcat('saving',airdir,'ARISEairprocessed_with_insitu_woRH.mat'));
+save([airdir,'ARISEairprocessed_with_insitu_woRH.mat'],'-struct','air');
 return;
 
 

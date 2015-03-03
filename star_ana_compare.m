@@ -4,6 +4,7 @@
 %----------------------------------
 % PURPOSE:
 %  - create atmospheric profiles from ARISE flights-vertical legs
+%  - add diagnostics and cloud profiles
 %  - plot individual profiles and average them, compare differences
 %
 % CALLING SEQUENCE:
@@ -22,6 +23,7 @@
 % DEPENDENCIES:
 %  - startup_plotting.m
 %  - save_fig.m
+%  - genCloudProf.m
 % 
 %
 % NEEDED FILES/INPUT:
@@ -36,6 +38,8 @@
 %
 % MODIFICATION HISTORY:
 % Written: Michal Segal-Rozenhaimer (MS), NASA Ames,Feb-02-2015
+% MS, 2015-02-24, added calculations of cloud profiles
+% MS, 2015-02-25, added calculation of atm profiles
 % -------------------------------------------------------------------------
 %% function routine
 function out = star_ana_compare
@@ -46,7 +50,10 @@ startup_plotting;
 % load 4star
 % this is only summary of meteorological data
 % next should add cloud data (flight, satellite etc. in separate routine) and analyze here
-star =  load('F:\ARISE\C-130data\Met\SeaIceProfiles\ARISEairprocessed_wTemp_noRH_noCloud.mat');
+% star =  load('F:\ARISE\C-130data\Met\SeaIceProfiles\ARISEairprocessed_wTemp_noRH_noCloud.mat');
+arisedir = 'F:\ARISE\C-130data\Met\SeaIceProfiles\';
+filename = 'ARISEairprocessed_with_insitu_woRH';
+star     =  load([arisedir filename '.mat']);
 
 % load MERRA
 reana = load('F:\ARISE\ArcticCRF\METdata\Sep2014\ARISEdomain\MERRAreanalysis_20140901_20141001_avgLon-140_avgLat72.5.mat');
@@ -58,9 +65,12 @@ ColorSet = varycolor(14);% max num of profiles per flight
 % find number of days analyzed
 nFields    = sum(~structfun(@isempty,star));
 starfieldNames  = fieldnames(star);
-
-for i=1:nFields-1
-    nProfiles = max(star.(starfieldNames{i,:}).prof.nprof);
+k=0;
+for i=1:nFields
+    % Extract only the "profnum" fields
+    names  = fieldnames(star.(starfieldNames{i,:}));
+    pnames = names(~cellfun('isempty', strfind(names, 'profnum')));
+    nProfiles = length(pnames);%max(star.(starfieldNames{i,:}).prof.nprof);
     % load ice-conc data
     daystr=starfieldNames{i,:};
     ice = readAMSR2data({daystr(4:11)});
@@ -82,15 +92,26 @@ for i=1:nFields-1
                               star.(starfieldNames{i,:}).(profstr).meanlon, 'nearest');
            
            % save reanalysis products into 4star profiles
-           star.(starfieldNames{i,:}).(profstr).ana_alt      = reana.(reanadate).altLevels;
-           star.(starfieldNames{i,:}).(profstr).ana_pst      = reana.(reanadate).plevels;
-           star.(starfieldNames{i,:}).(profstr).ana_tmp      = reana.(reanadate).airT(:,latintrp,lonintrp);
-           star.(starfieldNames{i,:}).(profstr).ana_rh       = reana.(reanadate).RH(:,latintrp,lonintrp);
-           star.(starfieldNames{i,:}).(profstr).ana_theta    = reana.(reanadate).potenT(:,latintrp,lonintrp);
-           star.(starfieldNames{i,:}).(profstr).ana_theta700 = reana.(reanadate).st700T(latintrp,lonintrp);
-           star.(starfieldNames{i,:}).(profstr).ana_theta925 = reana.(reanadate).st925T(latintrp,lonintrp);
+           star.(starfieldNames{i,:}).(profstr).ana.alt      = reana.(reanadate).altLevels;
+           star.(starfieldNames{i,:}).(profstr).ana.pst      = reana.(reanadate).plevels;
+           star.(starfieldNames{i,:}).(profstr).ana.tmp      = reana.(reanadate).airT(:,latintrp,lonintrp);
+           star.(starfieldNames{i,:}).(profstr).ana.rh       = reana.(reanadate).RH(:,latintrp,lonintrp);
+           star.(starfieldNames{i,:}).(profstr).ana.theta    = reana.(reanadate).potenT(:,latintrp,lonintrp);
+           star.(starfieldNames{i,:}).(profstr).ana.h2o      = reana.(reanadate).H2Omolec(:,latintrp,lonintrp);
+           star.(starfieldNames{i,:}).(profstr).ana.o3       = reana.(reanadate).O3molec(:,latintrp,lonintrp);
+           star.(starfieldNames{i,:}).(profstr).ana.air      = reana.(reanadate).airmolec(:,latintrp,lonintrp);
+           star.(starfieldNames{i,:}).(profstr).ana.theta700 = reana.(reanadate).st700T(latintrp,lonintrp);
+           star.(starfieldNames{i,:}).(profstr).ana.theta925 = reana.(reanadate).st925T(latintrp,lonintrp);
            
-           % find closest iceconc in 4STAR grid
+           
+           %% generate atmospheric profiles for RT simulations
+           %  only std and reanalysis
+            [star.(starfieldNames{i,:}).(profstr).ana.atmfile] = gen_atmos_rt(star.(starfieldNames{i,:}).(profstr)...
+                                                                             ,star.(starfieldNames{i,:}).(profstr).ana,0,daystr(4:11),profstr);
+%            %  std, reanalysis and c130
+%            [star.(starfieldNames{i,:}).(profstr).atmfile]     = gen_atmos_rt(star.(starfieldNames{i,:}).(profstr)...
+%                                                                             ,star.(starfieldNames{i,:}).(profstr).ana,1,daystr(4:11),profstr);
+           %% find closest iceconc in 4STAR grid
            % create interpolated grid
            F = TriScatteredInterp(ice.(strcat('amsr',daystr(4:11))).longrid(:),...
                                   ice.(strcat('amsr',daystr(4:11))).latgrid(:),...
@@ -115,7 +136,37 @@ for i=1:nFields-1
            hc=text(270,5.8,'- MERRA')    ;set(hc,'fontsize',12,'color','k');
            %legend('C130','MERRA');
            set(gca,'Fontsize',12);
-           % compare RH
+           clear ha hb hc
+           %% generate cloud fields for each profile
+           doy = datestr2doy(daystr(4:11),'yyyymmdd');
+           dprof = j;
+           k = k+1;
+           allprof = k;
+           [star.(starfieldNames{i,:}).(profstr).cld] = genCloudProf(star.(starfieldNames{i,:}).(profstr),dprof,allprof,daystr(4:11),num2str(doy));
+%            
+           %% compare temp with cloud flags
+           figure(101);
+           plot(flipud(star.(starfieldNames{i,:}).(profstr).Static_AirT+273),...
+                flipud(star.(starfieldNames{i,:}).(profstr).z/1000),':','color',ColorSet(j,:),'linewidth',2);hold on;
+           plot(reana.(reanadate).airT(:,latintrp,lonintrp),...
+                reana.(reanadate).altLevels/1000,'-','color',ColorSet(j,:),'linewidth',2);hold on;
+           if (star.(starfieldNames{i,:}).(profstr).cld.cldnum>0)
+           plot(flipud(star.(starfieldNames{i,:}).(profstr).Static_AirT(star.(starfieldNames{i,:}).(profstr).cld.cldflag==1)+273),...
+                flipud(star.(starfieldNames{i,:}).(profstr).z(star.(starfieldNames{i,:}).(profstr).cld.cldflag==1)/1000),...
+                'o','color',ColorSet(j,:),'markerFaceColor',ColorSet(j,:),'markersize',6);hold on;
+           end
+           xlabel('Temperature [K]','FontSize',12);
+           ylabel('Altitude [km]','fontSize',12);
+           set(gca,'YTick',[0:0.5:3]);set(gca,'YTickLabel',{'0.0','0.5','1.0','1.5','2.0','2.5','3.0'});
+           axis([255 275 0 3]);
+           ha=text(256,2.8,daystr(4:11))   ;set(ha,'fontsize',12,'color','k');
+           hb=text(271,2.7,'.. C130')      ;set(hb,'fontsize',12,'color','k');
+           hc=text(271,2.5,'- MERRA')      ;set(hc,'fontsize',12,'color','k');
+           hd=text(271,2.3,'o Cloud flag') ;set(hd,'fontsize',12,'color','k');
+           %legend('C130','MERRA');
+           set(gca,'Fontsize',12);
+           
+           %% compare RH/MMR
            
            %% smooth, then compare difference in Temp over ice/ocean
            starx = smooth(star.(starfieldNames{i,:}).(profstr).z/1000,0.05);%lowess used
@@ -129,12 +180,16 @@ for i=1:nFields-1
                                            star.(starfieldNames{i,:}).(profstr).Static_AirT+273);
                                            stary=stary(~isnan(stary));
            end
-           star.(starfieldNames{i,:}).(profstr).t700ind = interp1(starx,[1:length(starx)],2.500,'nearest'); % this is for ~2500 m at 700hPa  
-           star.(starfieldNames{i,:}).(profstr).t925ind = interp1(starx,[1:length(starx)],0.700 ,'nearest');% this is for ~700  m at 925hPa    
-           % figure;plot(stary,starx,'-r');
-           starTinterp=interp1(starx,stary,...
-                               reana.(reanadate).altLevels/1000);
-           dt = reana.(reanadate).airT(:,latintrp,lonintrp) - starTinterp';
+           if length(starx)>2
+               star.(starfieldNames{i,:}).(profstr).t700ind = interp1(starx,[1:length(starx)],2.500,'nearest'); % this is for ~2500 m at 700hPa  
+               star.(starfieldNames{i,:}).(profstr).t925ind = interp1(starx,[1:length(starx)],0.700 ,'nearest');% this is for ~700  m at 925hPa    
+               % figure;plot(stary,starx,'-r');
+               starTinterp=interp1(starx,stary,...
+                                   reana.(reanadate).altLevels/1000);
+                dt = reana.(reanadate).airT(:,latintrp,lonintrp) - starTinterp';
+           else
+                dt = NaN(length(reana.(reanadate).altLevels),1);
+           end
            if ~isnan(star.(starfieldNames{i,:}).(profstr).iceconc) && star.(starfieldNames{i,:}).(profstr).iceconc > 0
                an = [0.1 0.9 0.9];% sea-ice is cyan
                dtice = [dtice;dt'];
@@ -144,6 +199,8 @@ for i=1:nFields-1
                dtocean = [dtocean;dt'];
                tsurf_ocean = [tsurf_ocean;stary(1)];
            end
+           
+           %% plot Temp differences
            figure(11);
            plot((dt),(reana.(reanadate).altLevels/1000),'-o','color',an,...
                 'markerfacecolor',an,'linewidth',0.5,'markersize',4);hold on;
@@ -154,21 +211,49 @@ for i=1:nFields-1
            %legend('blue is over open ocean','cyan is over sea ice');
            set(gca,'Fontsize',12);
            
-           % compare difference in RH over ice/ocean
+           %% plot RH/MMR differences over ice/ocean
            
-           % summarize tropospheric stability (theta700) with ice/ocean
            
-           % summarize lower trop stability (theta925) with ice/ocean
+           %% create simple auxilliary profile dat file 
+           % (date profnum, timeat bottom,timeattop)
+           if strcmp(star.(starfieldNames{i,:}).(profstr).direction,'descend')
+               % profile bottom
+               t1 = datevec(star.(starfieldNames{i,:}).(profstr).time(end)/24);
+               time1 = strcat(num2str(t1(4)),':',num2str(t1(5)),':',num2str(t1(6)));
+               % profile top
+               t2 = datevec(star.(starfieldNames{i,:}).(profstr).time(1)/24);
+               time2 = strcat(num2str(t2(4)),':',num2str(t2(5)),':',num2str(t2(6)));
+           else
+               t1 = datevec(star.(starfieldNames{i,:}).(profstr).time(1)/24);
+               time1 = strcat(num2str(t1(4)),':',num2str(t1(5)),':',num2str(t1(6)));
+               t2 = datevec(star.(starfieldNames{i,:}).(profstr).time(end)/24);
+               time2 = strcat(num2str(t2(4)),':',num2str(t2(5)),':',num2str(t2(6)));
+           end
            
-           % create combined full column profile for CRE calculations
-           % inner function - get_atmos modified
-        end
+           filen1=['F:\ARISE\ArcticCRF\METdata\profiles_bottom.txt'];
+           disp( ['Writing to file: ' filen1]);
+           line1=[{'date ' daystr(4:11) ' profilenum ' num2str(j) ' DOY ' num2str(doy) ' UTtime ' time1}];
+           dlmwrite(filen1,line1,'-append','delimiter','');
+           clear line1;
+           
+           filen2=['F:\ARISE\ArcticCRF\METdata\profiles_top.txt'];
+           disp( ['Writing to file: ' filen2]);
+           line2=[{'date ' daystr(4:11) ' profilenum ' num2str(j) ' DOY ' num2str(doy) ' UTtime ' time2}];
+           dlmwrite(filen2,line2,'-append','delimiter','');
+           clear line;
+           
+        end% num of profiles
         %% save figure 10
         fi=[strcat('F:\ARISE\ArcticCRF\figures\', daystr(4:11),'tempCompare')];
         save_fig(10,fi,false);
         close(10);
-        %% save figure 11
-        %-----------------%
+        
+        %% save figure 101
+        fi=[strcat('F:\ARISE\ArcticCRF\figures\', daystr(4:11),'tempCompare_w_cldflag')];
+        save_fig(101,fi,false);
+        close(101);
+        %% continue and save figure 11
+        %-----------------------------%
             figure(11)
             hold on;
             if size(dtice,1)>1
@@ -201,10 +286,11 @@ for i=1:nFields-1
     star.(starfieldNames{i,:}).tsurf_ice_std     = nanstd( tsurf_ice);
     star.(starfieldNames{i,:}).tsurf_ocean_mean  = nanmean(tsurf_ocean);
     star.(starfieldNames{i,:}).tsurf_ocean_std   = nanstd( tsurf_ocean);
+
     end
 clear ice;   
 
-end
+end% number of days
 
 %% calculate LTS and LLSS per profile
            % LTS  - lower tropospheric stability (theta700-theta_surface)
@@ -256,7 +342,7 @@ for i=1:nFields-1
                 anaLTSice  = [anaLTSice;  star.(starfieldNames{i,:}).(profstr).ana_theta700];
                 anaLLSSice = [anaLLSSice; star.(starfieldNames{i,:}).(profstr).ana_theta925];
                 % store reanalysis data
-                %ana_theta700
+                % ana_theta700
             else
                 if ~isnan(star.(starfieldNames{i,:}).(profstr).t700ind)
                 star.(starfieldNames{i,:}).(profstr).LTS =...
@@ -274,6 +360,8 @@ for i=1:nFields-1
                 anaLTSocean  = [anaLTSocean;  star.(starfieldNames{i,:}).(profstr).ana_theta700];
                 anaLLSSocean = [anaLLSSocean; star.(starfieldNames{i,:}).(profstr).ana_theta925];
             end 
+        
+        
             
         end% profiles
          % calculate daily mean/std for C130
@@ -375,7 +463,8 @@ end% days
     save_fig(14,fi2,false);
     close(14);
 %% save processed star struct
-
+file2save=[strcat(arisedir,filename,'_w_anacompare_w_cldflag.mat')];
+save(file2save,'-struct','star');
 %% function to convert temperature to potential temperature
 function theta=temp2theta(temp,pst)
 % pst is pressure in hPa/mbar
