@@ -35,7 +35,9 @@
 % Written: Michal Segal-Rozenhaimer (MS), NASA Ames,Feb-23,2015  
 % MS, 2015-03-03, added profin variable to account for serial profile number
 %     adjusted dprof, allprof for saving purposes and data extraction
-% -------------------------------------------------------------------
+%     changed writing format into data file (from line for each cloud to
+%     line for each profile
+% ---------------------------------------------------------------------------
 %% function routine
 function [c] = genCloudProf(prof,dprof,allprof,daystr,doy)
 
@@ -329,29 +331,38 @@ end
            disp( ['Writing to file: ' filen]);
            [filepath filename ext] = fileparts(prof.ana.atmfile);
            atmosfile = strcat(filename, ext);
-           for i=1:c.cldnum
+           
+           % sort clouds by high to low
+           [cldtop ix] = sort(c.cldtop,'descend');
+            cldbot     = c.cldbot(ix);
+            cldthick   = c.cldthick(ix);
+            cldreff    = c.cldreff(ix);
+            cldphase   = c.cldphase(ix);
+            cldwc      = c.cldwc(ix);
+            
+           %for i=1:c.cldnum
                if prof.iceconc >15
                    s_albedo_file = 'albedo_ice.dat';%strcat('F:\ARISE\ArcticCRF\METdata\albedo\albedo_ice.dat');
                    w_albedo_file = strcat('albedo_ice_' ,num2str(round(prof.iceconc)),'.dat');
                    line=[{'date ' daystr ' profilenum ' num2str(dprof) ' DOY ' doy ' sza ' num2str(sza) ' lat ' num2str(lat) ' lon ' num2str(lon) ...
                           ' single albedo file ' s_albedo_file ' ice_conc ' num2str(round(prof.iceconc)) ' weighted albedo file ' w_albedo_file ' atmos file ' atmosfile...
-                          ' platform_low_alt ' num2str(c.c130sur_alt) ' numclouds ' num2str(c.cldnum) ' cloudabove ' num2str(c.cldabove) ' cloudbelow ' num2str(c.cldbelow) ' cloudtop ' num2str(c.cldtop(i)/1000)...
-                          ' cloudbot '  num2str(c.cldbot(i)/1000) ' cloudthick ' num2str(c.cldthick(i)/1000) ' cloudreff ' num2str(c.cldreff(i)) ' cloudphase ' num2str(c.cldphase(i))...
-                          ' cloudwc '   num2str(c.cldwc(i)) ' c130_sur_alt ' num2str(c.c130sur_alt)}];
+                          ' platform_low_alt ' num2str(c.c130sur_alt) ' numclouds ' num2str(c.cldnum) ' cloudabove ' num2str(c.cldabove) ' cloudbelow ' num2str(c.cldbelow) ' cloudtop ' num2str(cldtop'/1000)...
+                          ' cloudbot '  num2str(cldbot'/1000) ' cloudthick ' num2str(cldthick'/1000) ' cloudreff ' num2str(cldreff')  ' cloudphase ' num2str(cldphase')...
+                          ' cloudwc '   num2str(cldwc') '  '}];
                else
                    s_albedo_file = 'albedo_water.dat';
                    w_albedo_file = strcat('albedo_ice_' ,num2str(round(prof.iceconc)),'.dat');
                    line=[{'date ' daystr ' profilenum ' num2str(dprof) ' DOY ' doy ' sza ' num2str(sza) ' lat ' num2str(lat) ' lon ' num2str(lon) ...
                           ' single albedo file ' s_albedo_file ' ice_conc ' num2str(round(prof.iceconc)) ' weighted albedo file ' w_albedo_file ' atmos file ' atmosfile...
-                          ' platform_low_alt ' num2str(c.c130sur_alt) ' numclouds ' num2str(c.cldnum) ' cloudabove ' num2str(c.cldabove) ' cloudbelow ' num2str(c.cldbelow) ' cloudtop ' num2str(c.cldtop(i)/1000)...
-                          ' cloudbot '  num2str(c.cldbot(i)/1000) ' cloudthick ' num2str(c.cldthick(i)/1000) ' cloudreff ' num2str(c.cldreff(i)) ' cloudphase ' num2str(c.cldphase(i))...
-                          ' cloudwc '   num2str(c.cldwc(i)) ' c130_sur_alt ' num2str(c.c130sur_alt)}];
+                          ' platform_low_alt ' num2str(c.c130sur_alt) ' numclouds ' num2str(c.cldnum) ' cloudabove ' num2str(c.cldabove) ' cloudbelow ' num2str(c.cldbelow) ' cloudtop ' num2str(cldtop'/1000)...
+                          ' cloudbot '  num2str(cldbot'/1000) ' cloudthick ' num2str(cldthick'/1000) ' cloudreff ' num2str(cldreff') ' cloudphase ' num2str(cldphase')...
+                          ' cloudwc '   num2str(cldwc') '  '}];
                end
                
                dlmwrite(filen,line,'-append','delimiter','');
 
                clear line;
-           end
+           %end
 
 return;
 
