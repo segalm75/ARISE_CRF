@@ -15,6 +15,7 @@
 %
 % INPUT:
 %  - arise-C130-Hskping_c130_20140830_RA_Preliminary.ict air data
+%  - 20140901Probes.csv probes data
 % 
 % 
 % OUTPUT:
@@ -29,6 +30,7 @@
 % NEEDED FILES/INPUT:
 % 
 % - arise-C130-Hskping_c130_20140830_RA_Preliminary.ict air data
+% - 20140901Probes.csv files
 %
 % EXAMPLE:
 %  - out = createARISEAtmProf

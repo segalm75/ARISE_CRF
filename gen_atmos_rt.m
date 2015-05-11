@@ -38,6 +38,7 @@
 %
 % MODIFICATION HISTORY:
 % Written: Michal Segal, NASA Ames, 2015-02-25
+% MS, 2015-03-13, fixed bug in interpolation to 0 altitude in mode 0
 % -------------------------------------------------------------------------
 
 %% Start of function
@@ -100,18 +101,18 @@ legend('C130','reanalysis','Standard');
 
 %Relative Humidity
 subplot(2,2,3);
-plot(air.rh,air.z,'b.',ana.rh,ana.z,'r.');%,std.RH,std.z,'go');
-xlabel('Relative Humidity [%]');
-ylabel('Altitude [m]');
-title('Relative Humidity');
-legend('C130','reanalysis');
-%air density
-% plot(air.airnd,air.z,'b.',ana.airnd,ana.z,'r.',std.airnd,std.z,'go');
-% xlabel('air number density [#/cm^{-3}]');
+% plot(air.rh,air.z,'b.',ana.rh,ana.z,'r.');%,std.RH,std.z,'go');
+% xlabel('Relative Humidity [%]');
 % ylabel('Altitude [m]');
 % title('Relative Humidity');
-% legend('C130','reanalysis','standard');
-% title('Air density');
+% legend('C130','reanalysis');
+%air density
+plot(air.airnd,air.z,'b.',ana.airnd,ana.z,'r.',std.airnd,std.z,'go');
+xlabel('air number density [#/cm^{-3}]');
+ylabel('Altitude [m]');
+title('Relative Humidity');
+legend('C130','reanalysis','standard');
+title('Air density');
 
 %water vapor mixture
 subplot(2,2,4);
@@ -128,20 +129,24 @@ end
 %% Select the correct values, first from airborne, then from reanalysis, then from standard
 if mode==0
     % assign altitude according to reanalysis
-    z1=ana.z(1):-100:0;%1800:-200:1000;
-    zind = interp1(std.z,[1:length(std.z)],max(ana.z),'nearest');
-    if z1(end)~=0 z1 = [z1 0.0]; end
-    Z=[std.z(1:zind);z1'];
+    % only up to 30km - for Tinterp
+    % only up to 15km - for T and P interp
+    intind = interp1(ana.z,[1:length(ana.z)],15000,'nearest');
+    z1=ana.z(intind:end);%ana.z(1):-100:0;%1800:-200:1000;
+    zind = interp1(std.z,[1:length(std.z)],max(z1),'nearest');
+    if z1(end)~=0 z1 = [z1; 0.0]; end
+    Z=[std.z(1:zind-1);z1];
     % interp reanalysis
     [ana.zz,ana.i]=sort(ana.z);
     [ana.zz,ana.ia]=unique(ana.zz);
     ana.i=ana.i(ana.ia);
 
-    ana.Tz=interp1(ana.zz,ana.t(ana.i),Z);
-    ana.Pz=interp1(ana.zz,ana.p(ana.i),Z);
-    ana.Hz=interp1(ana.zz,ana.h2ond(ana.i),Z);
-    ana.Az=interp1(ana.zz,ana.airnd(ana.i),Z);
-    ana.Oz=interp1(ana.zz,ana.o3nd(ana.i),Z);
+    ana.Tz=interp1(ana.z,ana.t,Z,'linear','extrap');
+    ana.Pz=interp1([ana.z;120000],[ana.p; 2e-10],Z,'linear','extrap');
+    ana.Hz=interp1(ana.z,ana.h2ond,Z,'linear','extrap');
+    ana.Az=interp1(ana.z,ana.airnd,Z,'linear','extrap');
+    ana.Oz=interp1(ana.z,ana.o3nd,Z,'linear','extrap');
+    % ana.Oz=interp1(ana.zz,ana.o3nd(ana.i),Z,'linear','extrap');
     
     modestr = 'MERRA';
     
@@ -149,7 +154,7 @@ else
     % assign altitude according to airborne
     z1=max(air.z):-50:0;%1800:-200:1000;
     zind = interp1(std.z,[1:length(std.z)],max(air.z),'nearest');
-    Z=[std.z(1:zind);z1'];
+    Z=[std.z(1:zind-1);z1'];
     % interp air
     [air.zz,air.i]=sort(air.z);
     [air.zz,air.ia]=unique(air.zz);
@@ -169,6 +174,13 @@ else
     
     modestr = 'C130';
     
+    % test figure;
+    figure;
+    plot(ana.z,ana.airnd,'.b');hold on;
+    plot(Z,ana.Az,'.r')       ;hold on;
+    plot(std.z,std.airnd,'.g');hold on;
+    legend('ana-original','ana-interp','std');
+    
 end
 
 % interp std
@@ -183,28 +195,36 @@ if mode==0
     
     % temp
     atm.T=ana.Tz;
-    it2=find(isnan(atm.T));
-    atm.T(it2)=std.Tz(it2);
+%     it2=find(isnan(atm.T));
+%     atm.T(it2)=std.Tz(it2);
+    atm.T(1:zind)=std.Tz(1:zind);
     
     % pres
     atm.P=ana.Pz;
-    ip2=find(isnan(atm.P));
-    atm.P(ip2)=std.Pz(ip2);
+%     ip2=find(isnan(atm.P));
+%     atm.P(ip2)=std.Pz(ip2);
+    atm.P(1:zind)=std.Pz(1:zind);
+%     if sum(diff(atm.P)<0)>1
+%         atm.P = smooth(atm.P);
+%     end
     
     % water vapor
     atm.H=ana.Hz;
-    ih2=find(isnan(atm.H));
-    atm.H(ih2)=std.Hz(ih2);
+%     ih2=find(isnan(atm.H));
+%     atm.H(ih2)=std.Hz(ih2);
+    atm.H(1:zind)=std.Hz(1:zind);
     
     % air density
     atm.air=ana.Az;
-    ia2=find(isnan(atm.air));
-    atm.air(ia2)=std.Az(ia2);
+%     ia2=find(isnan(atm.air));
+%     atm.air(ia2)=std.Az(ia2);
+    atm.air(1:zind)=std.Az(1:zind);
     
     % o3 density
     atm.o3=ana.Oz;
-    io2=find(isnan(atm.o3));
-    atm.o3(io2)=std.Oz(io2);
+%     io2=find(isnan(atm.o3));
+%     atm.o3(io2)=std.Oz(io2);
+    atm.o3(1:zind)=std.Oz(1:zind);
     
 else
     

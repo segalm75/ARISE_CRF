@@ -52,7 +52,8 @@ startup_plotting;
 % next should add cloud data (flight, satellite etc. in separate routine) and analyze here
 % star =  load('F:\ARISE\C-130data\Met\SeaIceProfiles\ARISEairprocessed_wTemp_noRH_noCloud.mat');
 arisedir = 'F:\ARISE\C-130data\Met\SeaIceProfiles\';
-filename = 'ARISEairprocessed_with_insitu_woRH';
+%filename = 'ARISEairprocessed_with_insitu_woRH';this was used for RT runs
+filename = 'ARISEairprocessed_with_insitu_withWVparams20150318';
 star     =  load([arisedir filename '.mat']);
 
 % load MERRA
@@ -78,6 +79,8 @@ for i=1:nFields
     if nProfiles>0
         dtice       = [];
         dtocean     = [];
+        dmmrice     = [];
+        dmmrocean   = [];
         tsurf_ice   = [];
         tsurf_ocean = [];
         for j=1:nProfiles
@@ -97,6 +100,7 @@ for i=1:nFields
            star.(starfieldNames{i,:}).(profstr).ana.tmp      = reana.(reanadate).airT(:,latintrp,lonintrp);
            star.(starfieldNames{i,:}).(profstr).ana.rh       = reana.(reanadate).RH(:,latintrp,lonintrp);
            star.(starfieldNames{i,:}).(profstr).ana.theta    = reana.(reanadate).potenT(:,latintrp,lonintrp);
+           star.(starfieldNames{i,:}).(profstr).ana.mmr      = reana.(reanadate).watermmr(:,latintrp,lonintrp)*1000;% conversion from kg/kg to g/kg
            star.(starfieldNames{i,:}).(profstr).ana.h2o      = reana.(reanadate).H2Omolec(:,latintrp,lonintrp);
            star.(starfieldNames{i,:}).(profstr).ana.o3       = reana.(reanadate).O3molec(:,latintrp,lonintrp);
            star.(starfieldNames{i,:}).(profstr).ana.air      = reana.(reanadate).airmolec(:,latintrp,lonintrp);
@@ -171,35 +175,81 @@ for i=1:nFields
            %% smooth, then compare difference in Temp over ice/ocean
            starx = smooth(star.(starfieldNames{i,:}).(profstr).z/1000,0.05);%lowess used
            stary = smooth(starx,star.(starfieldNames{i,:}).(profstr).Static_AirT+273,0.15);%
+           starz = smooth(starx,star.(starfieldNames{i,:}).(profstr).MMR);%
           %starp = smooth(starx,star.(starfieldNames{i,:}).(profstr).StaticP,0.15);%
-           if length(unique(stary)) < length(stary) % then bin
+           if (length(unique(stary)) < length(stary)) ||  (length(unique(starz)) < length(starz))% then bin
                [npointsx,starx] = bin_profiles_simple(star.(starfieldNames{i,:}).(profstr).z/1000,...
                                            star.(starfieldNames{i,:}).(profstr).z/1000);            
                                            starx=starx(~isnan(starx));
                [npointsy,stary] = bin_profiles_simple(star.(starfieldNames{i,:}).(profstr).z/1000,...
                                            star.(starfieldNames{i,:}).(profstr).Static_AirT+273);
                                            stary=stary(~isnan(stary));
+               [npointsz,starz] = bin_profiles_simple(star.(starfieldNames{i,:}).(profstr).z/1000,...
+                                           star.(starfieldNames{i,:}).(profstr).MMR);
+                                           starz=starz(~isnan(starz));
            end
+           
            if length(starx)>2
                star.(starfieldNames{i,:}).(profstr).t700ind = interp1(starx,[1:length(starx)],2.500,'nearest'); % this is for ~2500 m at 700hPa  
                star.(starfieldNames{i,:}).(profstr).t925ind = interp1(starx,[1:length(starx)],0.700 ,'nearest');% this is for ~700  m at 925hPa    
-               % figure;plot(stary,starx,'-r');
-               starTinterp=interp1(starx,stary,...
+                % figure;plot(stary,starx,'-r');
+                % t [K]
+                star.(starfieldNames{i,:}).(profstr).airTinterp=interp1(starx,stary,...
                                    reana.(reanadate).altLevels/1000);
-                dt = reana.(reanadate).airT(:,latintrp,lonintrp) - starTinterp';
+                dt = reana.(reanadate).airT(:,latintrp,lonintrp) - star.(starfieldNames{i,:}).(profstr).airTinterp';
+                % MMR [g/kg]
+                if length(starz)>2
+                    star.(starfieldNames{i,:}).(profstr).airMMRinterp=interp1(starx,starz,...
+                                       reana.(reanadate).altLevels/1000);
+                    dmmr = reana.(reanadate).watermmr(:,latintrp,lonintrp)*1000 - star.(starfieldNames{i,:}).(profstr).airMMRinterp';
+                else
+                    star.(starfieldNames{i,:}).(profstr).airMMRinterp = [];
+                    dmmr = NaN(length(reana.(reanadate).altLevels),1);
+                end
+                
            else
+                % t [K]
+                star.(starfieldNames{i,:}).(profstr).airTinterp = [];
                 dt = NaN(length(reana.(reanadate).altLevels),1);
+                % MMR [g/kg]
+                star.(starfieldNames{i,:}).(profstr).airMMRinterp = [];
+                dmmr = NaN(length(reana.(reanadate).altLevels),1);
            end
+           
+           % interp aitT/airMMR to reana levels
+           if sum(~isNaN(star.(starfieldNames{i,:}).(profstr).airTinterp))>2
+                star.(starfieldNames{i,:}).(profstr).airTinterp = ...
+                       interp1(reana.(reanadate).altLevels,star.(starfieldNames{i,:}).(profstr).airTinterp,...
+                       reana.(reanadate).altLevels,'pchip');
+                       star.(starfieldNames{i,:}).(profstr).airTinterp(18:end) = NaN;
+           else
+               star.(starfieldNames{i,:}).(profstr).airTinterp = NaN(1,length(reana.(reanadate).altLevels));
+           end
+           
+           if sum(~isNaN(star.(starfieldNames{i,:}).(profstr).airMMRinterp))>2
+               star.(starfieldNames{i,:}).(profstr).airMMRinterp = ...
+                   interp1(reana.(reanadate).altLevels,star.(starfieldNames{i,:}).(profstr).airMMRinterp,...
+                           reana.(reanadate).altLevels,'pchip');
+               star.(starfieldNames{i,:}).(profstr).airMMRinterp(18:end) = NaN;
+           else
+               star.(starfieldNames{i,:}).(profstr).airMMRinterp = NaN(1,length(reana.(reanadate).altLevels));
+           end
+           
            if ~isnan(star.(starfieldNames{i,:}).(profstr).iceconc) && star.(starfieldNames{i,:}).(profstr).iceconc > 0
                an = [0.1 0.9 0.9];% sea-ice is cyan
                dtice = [dtice;dt'];
                tsurf_ice = [tsurf_ice;stary(1)];
+               dmmrice = [dmmrice;dmmr'];
            else
                an = [0.1 0.1 0.9];% open ocean is blue
                dtocean = [dtocean;dt'];
                tsurf_ocean = [tsurf_ocean;stary(1)];
+               dmmrocean = [dmmrocean;dmmr'];
            end
            
+           %% compile cloud profile into reanalysis levels
+            [airCldprof,npointscld] = bin_profiles_ana(reana.(reanadate).altLevels,star.(starfieldNames{i,:}).(profstr).z/1000,...
+                                           star.(starfieldNames{i,:}).(profstr).cld.cldflag);
            %% plot Temp differences
            figure(11);
            plot((dt),(reana.(reanadate).altLevels/1000),'-o','color',an,...
@@ -211,36 +261,44 @@ for i=1:nFields
            %legend('blue is over open ocean','cyan is over sea ice');
            set(gca,'Fontsize',12);
            
-           %% plot RH/MMR differences over ice/ocean
-           
+           %% plot MMR differences over ice/ocean
+           figure(111);
+           plot((dmmr),(reana.(reanadate).altLevels/1000),'-o','color',an,...
+                'markerfacecolor',an,'linewidth',0.5,'markersize',4);hold on;
+           xlabel('\DeltaMMR (MERRA-C130) [g/kg]','FontSize',12);
+           ylabel('Altitude [km]','fontSize',12);
+           set(gca,'YTick',[1:10]);set(gca,'YTickLabel',{'1','2','3','4','5','6','7','8','9','10'});
+           axis([-10 10 0 7]);
+           %legend('blue is over open ocean','cyan is over sea ice');
+           set(gca,'Fontsize',12);
            
            %% create simple auxilliary profile dat file 
            % (date profnum, timeat bottom,timeattop)
-           if strcmp(star.(starfieldNames{i,:}).(profstr).direction,'descend')
-               % profile bottom
-               t1 = datevec(star.(starfieldNames{i,:}).(profstr).time(end)/24);
-               time1 = strcat(num2str(t1(4)),':',num2str(t1(5)),':',num2str(t1(6)));
-               % profile top
-               t2 = datevec(star.(starfieldNames{i,:}).(profstr).time(1)/24);
-               time2 = strcat(num2str(t2(4)),':',num2str(t2(5)),':',num2str(t2(6)));
-           else
-               t1 = datevec(star.(starfieldNames{i,:}).(profstr).time(1)/24);
-               time1 = strcat(num2str(t1(4)),':',num2str(t1(5)),':',num2str(t1(6)));
-               t2 = datevec(star.(starfieldNames{i,:}).(profstr).time(end)/24);
-               time2 = strcat(num2str(t2(4)),':',num2str(t2(5)),':',num2str(t2(6)));
-           end
-           
-           filen1=['F:\ARISE\ArcticCRF\METdata\profiles_bottom.txt'];
-           disp( ['Writing to file: ' filen1]);
-           line1=[{'date ' daystr(4:11) ' profilenum ' num2str(j) ' DOY ' num2str(doy) ' UTtime ' time1}];
-           dlmwrite(filen1,line1,'-append','delimiter','');
-           clear line1;
-           
-           filen2=['F:\ARISE\ArcticCRF\METdata\profiles_top.txt'];
-           disp( ['Writing to file: ' filen2]);
-           line2=[{'date ' daystr(4:11) ' profilenum ' num2str(j) ' DOY ' num2str(doy) ' UTtime ' time2}];
-           dlmwrite(filen2,line2,'-append','delimiter','');
-           clear line;
+%            if strcmp(star.(starfieldNames{i,:}).(profstr).direction,'descend')
+%                % profile bottom
+%                t1 = datevec(star.(starfieldNames{i,:}).(profstr).time(end)/24);
+%                time1 = strcat(num2str(t1(4)),':',num2str(t1(5)),':',num2str(t1(6)));
+%                % profile top
+%                t2 = datevec(star.(starfieldNames{i,:}).(profstr).time(1)/24);
+%                time2 = strcat(num2str(t2(4)),':',num2str(t2(5)),':',num2str(t2(6)));
+%            else
+%                t1 = datevec(star.(starfieldNames{i,:}).(profstr).time(1)/24);
+%                time1 = strcat(num2str(t1(4)),':',num2str(t1(5)),':',num2str(t1(6)));
+%                t2 = datevec(star.(starfieldNames{i,:}).(profstr).time(end)/24);
+%                time2 = strcat(num2str(t2(4)),':',num2str(t2(5)),':',num2str(t2(6)));
+%            end
+%            
+%            filen1=['F:\ARISE\ArcticCRF\METdata\profiles_bottom.txt'];
+%            disp( ['Writing to file: ' filen1]);
+%            line1=[{'date ' daystr(4:11) ' profilenum ' num2str(j) ' DOY ' num2str(doy) ' UTtime ' time1}];
+%            dlmwrite(filen1,line1,'-append','delimiter','');
+%            clear line1;
+%            
+%            filen2=['F:\ARISE\ArcticCRF\METdata\profiles_top.txt'];
+%            disp( ['Writing to file: ' filen2]);
+%            line2=[{'date ' daystr(4:11) ' profilenum ' num2str(j) ' DOY ' num2str(doy) ' UTtime ' time2}];
+%            dlmwrite(filen2,line2,'-append','delimiter','');
+%            clear line;
            
         end% num of profiles
         %% save figure 10
@@ -277,10 +335,38 @@ for i=1:nFields
         fi1=[strcat('F:\ARISE\ArcticCRF\figures\', daystr(4:11),'deltatemp_ana_4star')];
         save_fig(11,fi1,false);
         close(11);
+        
+         %% continue and save figure 111
+        %-------------------------------%
+            figure(111)
+            hold on;
+            if size(dmmrice,1)>1
+                boxplot(dmmrice,  'boxstyle','filled','orientation','horizontal',...
+                                'positions',reana.(reanadate).altLevels/1000,'colors',[0.1 0.9 0.9]); hold on;
+                set(gca,'YTickLabel',{' '})   % Erase ylabels  
+            end
+            if size(dmmrocean,1)>1
+                boxplot(dmmrocean,'boxstyle','filled','orientation','horizontal',...
+                                'positions',reana.(reanadate).altLevels/1000,'colors',[0.1 0.1 0.9]);
+                %set(gca,'XTickLabel',{' '})  % Erase xlabels   
+                set(gca,'YTickLabel',{' '})   % Erase ylabels 
+            end
+            ytix = {'1','2','3','4','5','6','7','8','9','10'};   %  labels
+            ytixloc = [1:10];      %  label locations
+            set(gca,'YTickMode','auto','YTickLabel',ytix,'YTick',ytixloc);
+            axis([-10 10 0 7]);
+            h1=text(-9.5,6.5,daystr(4:11))       ;set(h1,'fontsize',12,'color','k');
+            h2=text(-9.5,5.8,'over sea-ice')     ;set(h2,'fontsize',12,'color',[0.1 0.9 0.9]);
+            h3=text(-9.5,5.5,'over open ocean');set(h3,'fontsize',12,'color',[0.1 0.1 0.9]);
+        fi1=[strcat('F:\ARISE\ArcticCRF\figures\', daystr(4:11),'deltaMMR_ana_4star')];
+        save_fig(111,fi1,false);
+        close(111);
     %% save derived quantities
     % save profile difference
     star.(starfieldNames{i,:}).dtice  = dtice;
-    star.(starfieldNames{i,:}).docean = dtocean;
+    star.(starfieldNames{i,:}).dtocean = dtocean;
+    star.(starfieldNames{i,:}).dmmrice  = dmmrice;
+    star.(starfieldNames{i,:}).dmmrocean = dmmrocean;
     % save surface temperatures
     star.(starfieldNames{i,:}).tsurf_ice_mean    = nanmean(tsurf_ice);
     star.(starfieldNames{i,:}).tsurf_ice_std     = nanstd( tsurf_ice);
@@ -463,7 +549,7 @@ end% days
     save_fig(14,fi2,false);
     close(14);
 %% save processed star struct
-file2save=[strcat(arisedir,filename,'_w_anacompare_w_cldflag_andProperties.mat')];
+file2save=[strcat(arisedir,filename,'_w_anacompare_w_consolidatedclouds20150318.mat')];
 save(file2save,'-struct','star');
 %% function to convert temperature to potential temperature
 function theta=temp2theta(temp,pst)

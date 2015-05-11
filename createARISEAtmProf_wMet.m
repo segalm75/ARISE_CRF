@@ -11,10 +11,12 @@
 %  - of cloud profile effect
 %
 % CALLING SEQUENCE:
-%  out = createARISEAtmProf
+%  out = createARISEAtmProf_wMet
 %
 % INPUT:
 %  - arise-C130-Hskping_c130_20140830_RA_Preliminary.ict air data
+%  - Arise-Waterparams-13Sept2014.csv complimentary water vapor air data
+%  - 20140901Probes.csv probes .csv files
 % 
 % 
 % OUTPUT:
@@ -29,9 +31,12 @@
 % NEEDED FILES/INPUT:
 % 
 % - arise-C130-Hskping_c130_20140830_RA_Preliminary.ict air data
+% - Arise-Waterparams-13Sept2014.csv complimentary water vapor air data
+% - 20140901Probes.csv probes .csv files
+%
 %
 % EXAMPLE:
-%  - out = createARISEAtmProf
+%  - out = createARISEAtmProf_wMET
 %
 %
 % MODIFICATION HISTORY:
@@ -43,23 +48,35 @@
 %                 change version set to v1.1 due to probe data addition
 % -------------------------------------------------------------------------
 %% function routine
-function out = createARISEAtmProf
+function out = createARISEAtmProf_wMet
 version_set('1.1');
 startup_plotting;
 %compare = 'false'; % defualt is false
 %% choose input directory or file
 % ------------------------------ %
 % air data
+% under: F:\ARISE\C-130data\Met
 airinfile = getfullname__('arise-C130-Hskping_c130_*.ict','F:','Select a met ict* files directory');
 [airdir, fname, ext] = fileparts(airinfile);
  airdir = [airdir, filesep];
  air_files = dir([airdir,'arise-C130-Hskping_c130_*.ict']);
+ 
+ % complimentary water vapor air data in .csv format
+ % under F:\ARISE\C-130data\Met\NewArchiveData
+ wvinfile = getfullname__('Arise_Waterparams*.csv','F:','Select water vapor .csv files directory');
+[wvdir, fname, ext] = fileparts(wvinfile);
+ wvdir = [wvdir, filesep];
+ wv_files = dir([wvdir,'Arise-Waterparams*.csv']);
+ 
  % in-situ probe data
- isinfile = getfullname__('*Probes.csv','F:','Select probes ict* files directory');
+ % under: F:\ARISE\C-130data\Probes
+ isinfile = getfullname__('*Probes.csv','F:','Select probes *.csv files directory');
 [isdir, fname, ext] = fileparts(isinfile);
  isdir = [isdir, filesep];
  is_files = dir([isdir,'*Probes.csv']);
- %4star data
+ 
+ % 4star data
+ % under F:\ARISE\starmat_ARISE
  starinfile = getfullname__('*star.mat','F:','Select star.mat files directory');
 [stardir, fname, ext] = fileparts(starinfile);
  stardir = [stardir, filesep];
@@ -93,6 +110,36 @@ airinfile = getfullname__('arise-C130-Hskping_c130_*.ict','F:','Select a met ict
         air.(dates_str).RH            = tmp.Relative_Humidity;  %[%] 
         clear tmp;
         
+        % replace ict met data with existing .csv water vapor data
+        wvfname = strcat(wvdir,'Arise_Waterparams_',dates(i),'.csv');
+        if exist(wvfname{:},'file')
+            
+            tmp =importdata(wvfname{:});   % water vapor data 
+            timeutc = (tmp.data(:,1)/86400)*24;
+            pressure= tmp.data(:,5);
+            sat     = tmp.data(:,6);
+            dewpoint= tmp.data(:,7);
+            partpres= tmp.data(:,8);
+            mmr     = tmp.data(:,9);
+            satPwat = tmp.data(:,10);
+            satPice = tmp.data(:,11);
+            rh      = tmp.data(:,12);
+            
+            if strcmp(dates(i),'20140924')
+                timeutc(2) = timeutc(1) + 0.0001;
+            end
+            
+            air.(dates_str).StaticP      = interp1(timeutc,pressure, air.(dates_str).UTChr);
+            air.(dates_str).SatVPwater   = interp1(timeutc,satPwat , air.(dates_str).UTChr);
+            air.(dates_str).SatVPice     = interp1(timeutc,satPice , air.(dates_str).UTChr);
+            air.(dates_str).DewPoint     = interp1(timeutc,dewpoint, air.(dates_str).UTChr);
+            air.(dates_str).MMR          = interp1(timeutc,mmr     , air.(dates_str).UTChr);
+            air.(dates_str).PartPwater   = interp1(timeutc,partpres, air.(dates_str).UTChr);
+            air.(dates_str).RH           = interp1(timeutc,rh      , air.(dates_str).UTChr);
+            
+            clear tmp;
+        end
+        
         tmp=csvread([isdir  is_files(i).name]);          % probes data
         % interpolate params to air time
         is_params = [5:9 14 18 23 30 35 40 45];%{'TWC_gm3','LWC1_gm3','LWC2_gm3','PWV_cm','LWP_mm','nCDP_cm3','CDP03_dNdlogD','CDP08_dNdlogD','CDP15_dNdlogD','CDP20_dNdlogD','CDP25_dNdlogD','CDP30_dNdlogD'};
@@ -109,7 +156,7 @@ airinfile = getfullname__('arise-C130-Hskping_c130_*.ict','F:','Select a met ict
                      interp1(24*(tmp(:,1)/86400),tmp(:,is_params(kk)),...
                      air.(dates_str).UTChr,'nearest');
         end
-        
+        clear tmp;
         % load 4star
         s=load([stardir  star_files(i).name]);           % 4star data
         utc_range = [air.(dates_str).UTChr(1),...
@@ -186,6 +233,12 @@ for i=1:length(air_files)
                                                                      air.(dates_str).UTChr>=ut1);
                 air.(dates_str).(prof_str).RH =...
                      air.(dates_str).RH(air.(dates_str).UTChr<=ut2 &...
+                                                                     air.(dates_str).UTChr>=ut1);
+                air.(dates_str).(prof_str).SatVPwater =...
+                     air.(dates_str).SatVPwater(air.(dates_str).UTChr<=ut2 &...
+                                                                     air.(dates_str).UTChr>=ut1);
+                air.(dates_str).(prof_str).SatVPice =...
+                     air.(dates_str).SatVPice(air.(dates_str).UTChr<=ut2 &...
                                                                      air.(dates_str).UTChr>=ut1);
                 air.(dates_str).(prof_str).starStr =...
                      air.(dates_str).starStr(air.(dates_str).UTChr<=ut2 &...
@@ -317,8 +370,8 @@ movie2avi(RHmov, 'ARISEmeanRHprof.avi', 'compression','None', 'fps',1);
 winopen('ARISEmeanRHprof.avi');
 
 %% save processed air struct for all flights
-disp(strcat('saving',airdir,'ARISEairprocessed.mat'));
-save([airdir,'ARISEairprocessed.mat'],'-struct','air');
+disp(strcat('saving',airdir,'ARISEairprocessed_with_insitu_withWVparams.mat'));
+save([airdir,'ARISEairprocessed_with_insitu_withWVparams.mat'],'-struct','air');
 return;
 
 

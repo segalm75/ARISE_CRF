@@ -1,9 +1,11 @@
 %% PURPOSE:
 %   binning of atmospheric profile parameters from flight data
-%   this is only for one profile per run
+%   this is only for one profile per run according to reanalysis
+%   altitude levels
 %
 % CALLING SEQUENCE:
-%   [npoints,varmean] = bin_profiles_simple(alt,var)
+%   [npoints,varmean] = bin_profiles_simple(z,alt,var)
+%   z is altitude array from reanalysis
 %   alt and var need to have same size
 %
 % INPUT:
@@ -19,24 +21,21 @@
 % 
 %
 % EXAMPLE:
-%  [npoints,varmean] = bin_profiles(alt,temp)
+%  [npoints,varmean] = bin_profiles_ana(ana.z,alt,temp)
 %
 % MODIFICATION HISTORY:
-% Written: Michal Segal, NASA Ames, Feb 10, 2015
+% Written: Michal Segal, NASA Ames, Mar, 18, 2015
 % 
 % -------------------------------------------------------------------------
 
 %% Start of function
 
-function [npoints,varmean] = bin_profiles_simple(alt,var)
+function [npoints,varsum] = bin_profiles_ana(z,alt,var)
 
-% set common altitude range [m]
-ztop = 12000/1000;
-zbot = 0;
-deltaz = 50/1000;
-nlayer=(ztop-zbot)/deltaz;
-zlow=[zbot:deltaz:ztop-deltaz];
-zhigh=[zbot+deltaz:deltaz:ztop];
+% set common altitude range [km]
+nlayer = length(z);
+zlow=[0,z(1:end-1)];zlow = zlow/1000;
+zhigh=[z(1:end)];zhigh = zhigh/1000;
 
 % create dummy variables
 
@@ -48,8 +47,8 @@ for iz = 1:nlayer
    
         jzuse        = find(alt>=zlow(iz) & alt<=zhigh(iz));% find all indices in each layer in each profile
         %varmean      = nanmean(var(jzuse));                          
-        varmean(iz)     = nanmean(var(jzuse));
-        npoints(iz)     = sum(~isNaN(varmean));
+        varsum(iz)      = sum(var(jzuse));
+        npoints(iz)     = logical(varsum(iz)>0);
 end
 
 return;

@@ -37,6 +37,8 @@
 %     adjusted dprof, allprof for saving purposes and data extraction
 %     changed writing format into data file (from line for each cloud to
 %     line for each profile
+% MS, 2015-03-13, changed nCDPt threshold from 2 to 0.1
+%                 added 2 options to consolidate cloud layers
 % ---------------------------------------------------------------------------
 %% function routine
 function [c] = genCloudProf(prof,dprof,allprof,daystr,doy)
@@ -47,14 +49,15 @@ startup_plotting;
 %% cloud flag
 
 % plot nCDP to determine threshold
-% figure(22);
-% plot(prof.time,...
-%      prof.nCDP_cm3,'.b');hold on;
-% plot(prof.time,...
-%      nanmean(prof.nCDP_cm3),'--g');hold on;
+%   figure(22);
+%   plot(prof.time,...
+%        prof.nCDP_cm3,'.b');hold on;
+%   plot(prof.time,...
+%        nanmean(prof.nCDP_cm3),'--g');hold on;
+%   figure;plot(prof.nCDP_cm3,'.g');
 % figure(222);hist(prof.nCDP_cm3,[1:2:100]);
 % nCDPq = quantile(prof.nCDP_cm3,[.025 .25 .50 .75 .975]); % Summary of nCDP
-nCDPt = 2;% set constant for now; nCDPq(4);
+nCDPt = 0.1;% set constant for now; nCDPq(4);
 
 % generate cloud flag
 cloudflag = logical(prof.nCDP_cm3>nCDPt);
@@ -102,6 +105,12 @@ else
     c.cldstart = NaN;
     c.cldend   = NaN;
 end
+
+% check for cloud layer by alt/time derivative
+zdiff  = diff(smooth(double(prof.z)));   zdiff = [zdiff;zdiff(end)];
+zdiff2 = diff(smooth(double(zdiff)));    zdiff2 = [zdiff2;zdiff2(end)];
+tdiff = diff(smooth(double(prof.time)));tdiff = [tdiff;tdiff(end)];
+dzdt  = zdiff./tdiff;
 
 if c.cldnum==0
     c.cldstart = [];
@@ -185,7 +194,7 @@ for i=1:c.cldnum
         wp = nanmean(prof.LWP_mm(c.cldstart(i):c.cldstart(i)+5));% in mm (from GVR)
     end
     if wp==0 wp=0.04; end;
-    c.cldwc(i)= (wp*cnvrt*100^2)/c.cldthick(i);                    % this is water path [g/m3]
+    c.cldwc(i)= (wp*cnvrt*100^2)/c.cldthick(i);                  % this is water path [g/m3]
 end
 
 end% if cloud
@@ -249,6 +258,7 @@ end
 bfile = 'F:\ARISE\ArcticCRF\METdata\clouds_surface_below20150303.txt';
 bflag = importdata(bfile);
 c.cldbelow = bflag.data(allprof,2);
+%c.cldbelow = 0; % this is to test without cloud below
 % add below cloud to cloud layers
 if c.cldbelow==1
     c.cldnum = c.cldnum + 1;
@@ -326,20 +336,209 @@ end
            
            [sza, az, soldst, ha, dec, el, am] = sunae(lat, lon, datenum(day));
            
+          
+           %% consolidate cloud layers
+           % sort clouds by high to low
+           [cldtop ix]   = sort(c.cldtop,'descend');
+           %[cldstart ix] = sort(c.cldstart,'descend');
+            cldbot     = c.cldbot(ix);
+            cldthick   = c.cldthick(ix);
+            cldreff    = c.cldreff(ix);
+            cldphase   = c.cldphase(ix);
+            cldwc      = c.cldwc(ix);
+            cldstart   = c.cldstart(ix);
+            cldend     = c.cldend(ix);
+            
+           % consolidate cloud layers
+            logic = ones(length(cldtop),1);
+            cloud = [cldbot,cldtop,cldthick,cldstart,cldend,cldphase,cldreff,cldwc,logic];
+            %clear cldtop cldbot cldstart cldend cldthick cldphase cldwc cldreff
+%             for k=length(cloud)-1:-1:2
+%                 if  (cloud(k+1,2) >= cloud(k,1))
+%                     % top of lower cloud higher than bottom
+%                     % of above cloud, then consolidate
+%                     cloud(k,1)     = cloud(k+1,1);    % replace cloud bot
+%                     cloud(k,4)     = cloud(k+1,4);    % replace all above line
+%                     cloud(k+1,end)   = 0;             % don't keep
+%                     %cloud(k-1,end) = 1;              % keep for next iteration
+%                     
+%                 end
+%             end
+           % check for thickness
+           if ~isempty(cloud)
+               for k=size(cloud,1):-1:1
+                   if cloud(k,3)<50 && cloud(k,1)~=0
+                       cloud(k,end)   = 0;               % don't keep
+                   end
+               end
+               % consolidate I
+               %cloudnew = cloud(cloud(:,end)==1,:);
+               cflagind = find(cloudflag==1);
+           
+           if     2==1% test(cloud(end,1)==0)&& (size(cloud,1) >1 && (sum(cloud(:,end))==1 || sum(cloud(:,end))==0))
+                  % choose next cloud from cloudflag
+                  if strcmp(prof.direction,'descend')
+                      cldstart = cflagind(end);
+                      cldend   = cflagind(1);
+                      cldbot   = prof.z(cldstart);%prof.z(cflagind(end));
+                      cldtop   = prof.z(cldend);  %prof.z(cflagind(1));
+                      cldthick = cldtop - cldbot;
+                  else
+                      cldstart = cflagind(1);
+                      cldend   = cflagind(end);
+                      cldbot   = prof.z(cldstart);     %prof.z(cflagind(1));
+                      cldtop   = prof.z(cldend);       %prof.z(cflagind(end));
+                      cldthick = cldtop - cldbot;
+                  end
+                   
+
+                   % sum and avg normalized particle number per cloud
+                   partsum   = zeros(1,length(reff));
+                   for j=1:length(reff)
+                       pstr = strcat('CDP',reff{:,j},'um');
+                       partsum(j) = sum(prof.(pstr)(cldstart:cldend));
+                   end
+                   cldreff = round(sum((partsum.*reffum))/sum(partsum));
+                   clear partsum; 
+                   
+                   % cloudphase
+                    if cldreff <= 30 && nanmean(prof.Static_AirT(cldstart:c.cldend))> -20
+                        cldphase = 0;
+                    elseif cldreff > 30 && nanmean(prof.Static_AirT(cldstart:cldend))< -20
+                        cldphase = 1;
+                    elseif cldreff >= 30 && nanmean(prof.Static_AirT(cldstart:cldend))> -20 &&...
+                                                 nanmean(prof.Static_AirT(cldstart:cldend))<  0
+                        cldphase = 2;
+                    else
+                        cldphase = 0;
+                    end
+                    
+                    % wc
+                    if strcmp(prof.direction,'descend')
+                        wp = nanmean(prof.LWP_mm(cldend-5:cldend));    % in mm (from GVR)
+                    else
+                        wp = nanmean(prof.LWP_mm(cldstart:cldstart+5));% in mm (from GVR)
+                    end
+                    if wp==0 wp=0.04; end;
+                    cldwc = (wp*0.1*100^2)/cldthick;                   % this is water path [g/m3]
+                    % construct consolidated cloud struct
+                    clear c.cldnum c.cldstart c.cldend c.cldthick c.cldreff c.cldwc c.cldphase c.cldtop c.cldbot
+                    if cloud(end,1)==0
+                        c.cldstart = [cloud(end,4);cldstart];
+                        c.cldend   = [cloud(end,5);cldend];
+                        c.cldthick = [cloud(end,3);cldthick]; cldthick = c.cldthick;
+                        c.cldbot   = [cloud(end,1);cldbot];   cldbot   = c.cldbot;
+                        c.cldtop   = [cloud(end,2);cldtop];   cldtop   = c.cldtop;
+                        c.cldphase = [cloud(end,6);cldphase]; cldphase = c.cldphase;
+                        c.cldreff  = [cloud(end,7);cldreff];  cldreff  = c.cldreff;
+                        c.cldwc    = [cloud(end,8);cldwc];    cldwc    = c.cldwc;
+                        c.cldnum   = length(c.cldstart);
+                    else
+                        c.cldstart = [cldstart];
+                        c.cldend   = [cldend];
+                        c.cldthick = [cldthick];
+                        c.cldbot   = [cldbot];
+                        c.cldtop   = [cldtop];
+                        c.cldphase = [cldphase];
+                        c.cldreff  = [cldreff];
+                        c.cldwc    = [cldwc];
+                        c.cldnum   = length(c.cldstart);
+                    end
+           elseif size(cloud,1) > 1 && sum(cloud(:,end)) < (size(cloud,1))%size(cloud,1) > 1 && sum(cloud(:,end)) == (size(cloud,1)-1)
+                  % consolidate II
+                   for k=2:size(cloud,1)
+                       dis(1) = 10000;
+                       dis(k) = abs(cloud(k-1,5)-cloud(k,4));
+                   end
+                   cl = cloud(:,end);
+                   [cmin I] = min(dis);
+                   % assign new values
+                   % consolidate cloud=0 with min cloud distance
+                   if cl(I-1)==0
+                           cloud(I,2) = cloud(I-1,2);% cldtop
+                           cloud(I,4) = cloud(I-1,4);% cldstart
+                           cloud(I,3) = cloud(I,2) - cloud(I,1);% cldthick
+
+                           % reff
+                           partsum   = zeros(1,length(reff));
+                           for j=1:length(reff)
+                               pstr = strcat('CDP',reff{:,j},'um');
+                               partsum(j) = sum(prof.(pstr)(cloud(I,4):cloud(I,5)));
+                           end
+                           cloud(I,7) = round(sum((partsum.*reffum))/sum(partsum));
+                           clear partsum; 
+
+                           % cloudphase
+                            if cloud(I,7) <= 30 && nanmean(prof.Static_AirT(cloud(I,4):cloud(I,5)))> -20
+                                cloud(I,6) = 0;
+                            elseif cloud(I,7) > 30 && nanmean(prof.Static_AirT(cloud(I,4):cloud(I,5)))< -20
+                                cloud(I,6) = 1;
+                            elseif cloud(I,7) >= 30 && nanmean(prof.Static_AirT(cloud(I,4):cloud(I,5)))> -20 &&...
+                                                         nanmean(prof.Static_AirT(cloud(I,4):cloud(I,5)))<  0
+                                cloud(I,6) = 2;
+                            else
+                                cloud(I,6) = 0;
+                            end
+
+                            % wc
+                            if strcmp(prof.direction,'descend')
+                                wp = nanmean(prof.LWP_mm(cloud(I,5)-5:cloud(I,5)));    % in mm (from GVR)
+                            else
+                                wp = nanmean(prof.LWP_mm(cloud(I,4):cloud(I,4)+5));    % in mm (from GVR)
+                            end
+                            if wp==0 wp=0.04; end;
+                            cloud(I,8) = (wp*0.1*100^2)/cloud(I,3);                    % this is water path [g/m3]
+
+                            % construct consolidated cloud struct
+                            clear c.cldnum c.cldstart c.cldend c.cldthick c.cldreff c.cldwc c.cldphase c.cldtop c.cldbot
+                            if sum(cl) == size(cloud,1) -1
+                                cloud = cloud(cl==1,:);
+                                c.cldnum   = sum(cl==1);
+                            else
+                                cloudtmp = cloud(1:I-2,:);cloud = [cloudtmp;cloud(I:end,:)];
+                                c.cldnum = size(cloud,1);
+                            end
+                             c.cldstart = cloud(:,4);
+                             c.cldend   = cloud(:,5);
+                             c.cldthick = cloud(:,3); cldthick = c.cldthick;
+                             c.cldbot   = cloud(:,1); cldbot   = c.cldbot;
+                             c.cldtop   = cloud(:,2); cldtop   = c.cldtop;
+                             c.cldphase = cloud(:,6); cldphase = c.cldphase;
+                             c.cldreff  = cloud(:,7); cldreff  = c.cldreff;
+                             c.cldwc    = cloud(:,8); cldwc    = c.cldwc;
+                       else
+
+                             % use original c.cld struct
+                            cldbot     = cloud(:,1);
+                            cldtop     = cloud(:,2);
+                            cldthick   = cloud(:,3);
+                            cldreff    = cloud(:,7);
+                            cldphase   = cloud(:,6);
+                            cldwc      = cloud(:,8);
+                            cldstart   = cloud(:,4);
+                            cldend     = cloud(:,5);
+                   end
+           else
+                    % use original c.cld struct
+                    cldbot     = cloud(:,1);
+                    cldtop     = cloud(:,2);
+                    cldthick   = cloud(:,3);
+                    cldreff    = cloud(:,7);
+                    cldphase   = cloud(:,6);
+                    cldwc      = cloud(:,8);
+                    cldstart   = cloud(:,4);
+                    cldend     = cloud(:,5);
+                   
+           end
+           end
+           
+          
+           %% save cloud params to file
            % write data to file
-           filen=['C:\cygwin\home\msegalro\libradtran\input\CRF\arise\MERRABASE\MERRABASEdatin.txt'];
+           filen=['C:\cygwin\home\msegalro\libradtran\input\CRF\arise\MERRABASE\MERRABASE_consolidateclouds.txt'];
            disp( ['Writing to file: ' filen]);
            [filepath filename ext] = fileparts(prof.ana.atmfile);
            atmosfile = strcat(filename, ext);
-           
-           % sort clouds by high to low
-           [cldtop ix] = sort(c.cldtop,'descend');
-            cldbot   = c.cldbot(ix);
-            cldthick = c.cldthick(ix);
-            cldreff  = c.cldreff(ix);
-            cldphase = c.cldphase(ix);
-            cldwc    = c.cldwc(ix);
-            
            %for i=1:c.cldnum
                if prof.iceconc >15
                    s_albedo_file = 'albedo_ice.dat';%strcat('F:\ARISE\ArcticCRF\METdata\albedo\albedo_ice.dat');
@@ -348,7 +547,7 @@ end
                           ' single albedo file ' s_albedo_file ' ice_conc ' num2str(round(prof.iceconc)) ' weighted albedo file ' w_albedo_file ' atmos file ' atmosfile...
                           ' platform_low_alt ' num2str(c.c130sur_alt) ' numclouds ' num2str(c.cldnum) ' cloudabove ' num2str(c.cldabove) ' cloudbelow ' num2str(c.cldbelow) ' cloudtop ' num2str(cldtop'/1000)...
                           ' cloudbot '  num2str(cldbot'/1000) ' cloudthick ' num2str(cldthick'/1000) ' cloudreff ' num2str(cldreff')  ' cloudphase ' num2str(cldphase')...
-                          ' cloudwc '   num2str(cldwc')}];
+                          ' cloudwc '   num2str(cldwc') '  '}];
                else
                    s_albedo_file = 'albedo_water.dat';
                    w_albedo_file = strcat('albedo_ice_' ,num2str(round(prof.iceconc)),'.dat');
@@ -356,7 +555,7 @@ end
                           ' single albedo file ' s_albedo_file ' ice_conc ' num2str(round(prof.iceconc)) ' weighted albedo file ' w_albedo_file ' atmos file ' atmosfile...
                           ' platform_low_alt ' num2str(c.c130sur_alt) ' numclouds ' num2str(c.cldnum) ' cloudabove ' num2str(c.cldabove) ' cloudbelow ' num2str(c.cldbelow) ' cloudtop ' num2str(cldtop'/1000)...
                           ' cloudbot '  num2str(cldbot'/1000) ' cloudthick ' num2str(cldthick'/1000) ' cloudreff ' num2str(cldreff') ' cloudphase ' num2str(cldphase')...
-                          ' cloudwc '   num2str(cldwc')}];
+                          ' cloudwc '   num2str(cldwc') '  '}];
                end
                
                dlmwrite(filen,line,'-append','delimiter','');
