@@ -422,7 +422,24 @@ for i=1:nFields
     end
 end
 
+%% plot potential temperature for each day
+%xerrorbar2(axestype,xmin, xmax, ymin, ymax, x, y, l,u,symbol,teelength,colorsym)
+ColorSet = varycolor(length(sfieldNames));% max num of profiles per flight
+legendall={};
+for i=1:nFields
+    names  = fieldnames(s.(sfieldNames{i,:}));
+    pnames = names(~cellfun('isempty', strfind(names, 'profnum')));
+    nProfiles = length(pnames);
+        if nProfiles>0
+            figure(10);
+            xerrorbar2('linlin',250,300, 0, 10, s.(sfieldNames{i,:}).prof.thetamean,s.(sfieldNames{i,:}).prof.zmean/1000,...
+                                       s.(sfieldNames{i,:}).prof.thetastd,s.(sfieldNames{i,:}).prof.thetastd,'-',0.01,ColorSet(i,:));hold on;
+            legendall = [legendall;sfieldNames{i,:}(4:11)];
+        end
 
+end
+legend(legendall);
+xlabel('\Theta [K]');ylabel('Altitude [km]');
 %% plot SW/LW/tot with level
 figure(333);
 range = {'Surface CRE [W/m^{2}]','C-130 CRE [W/m^{2}]','TOA CRE [W/m^{2}]'};
@@ -907,17 +924,17 @@ dlw_nofog_walb = [dlwMERRAnfwasur dlwMERRAnfwaair dlwMERRAnfwatoa];
 dtot_nofog_walb = [dtotMERRAnfwasur dtotMERRAnfwaair dtotMERRAnfwatoa];
 
 %noFogwAlb - MERRAwAlb
-dswMERRAfogsur = swMERRAnfwasur - swMERRAwasur;
-dlwMERRAfogsur = lwMERRAnfwasur - lwMERRAwasur;
-dtotMERRAfogsur = totMERRAnfwasur - totMERRAwasur;
+dswMERRAfogsur = swMERRAwasur - swMERRAnfwasur;%swMERRAnfwasur - swMERRAwasur;
+dlwMERRAfogsur = lwMERRAwasur - lwMERRAnfwasur;%lwMERRAnfwasur - lwMERRAwasur;
+dtotMERRAfogsur = totMERRAwasur - totMERRAnfwasur;%totMERRAnfwasur - totMERRAwasur;
 
-dswMERRAfogair = swMERRAnfwaair - swMERRAwaair;
-dlwMERRAfogair = lwMERRAnfwaair - lwMERRAwaair;
-dtotMERRAfogair = totMERRAnfwaair - totMERRAwaair;
+dswMERRAfogair = swMERRAwaair - swMERRAnfwaair;%swMERRAnfwaair - swMERRAwaair;
+dlwMERRAfogair = lwMERRAwaair - lwMERRAnfwaair;%lwMERRAnfwaair - lwMERRAwaair;
+dtotMERRAfogair = totMERRAwaair - totMERRAnfwaair;%totMERRAnfwaair - totMERRAwaair;
 
-dswMERRAfogtoa = swMERRAnfwatoa - swMERRAwatoa;
-dlwMERRAfogtoa = lwMERRAnfwatoa - lwMERRAwatoa;
-dtotMERRAfogtoa = totMERRAnfwatoa - totMERRAwatoa;
+dswMERRAfogtoa = swMERRAwatoa - swMERRAnfwatoa;% swMERRAnfwatoa - swMERRAwatoa;
+dlwMERRAfogtoa = lwMERRAwatoa - lwMERRAnfwatoa;%lwMERRAnfwatoa - lwMERRAwatoa;
+dtotMERRAfogtoa = totMERRAwatoa - totMERRAnfwatoa;%totMERRAnfwatoa - totMERRAwatoa;
 
 dsw_fog = [dswMERRAfogsur dswMERRAfogair dswMERRAfogtoa];
 dlw_fog = [dlwMERRAfogsur dlwMERRAfogair dlwMERRAfogtoa];
@@ -1123,6 +1140,7 @@ tot_nfwalb_byice= {dtot_nfwa_byice.ice0_15(dtot_nfwa_byice.ice0_15(:,1)~=0,:);dt
 
                
 % delta_nofog_walb - merrabase_wAlb by ice conc
+% this is merrabase_wAlb - nofog_wAlb
 % sw/lw/tot
 for i = 1:length(unique(iceconcgroup))
     ice = unique(iceconcgroup); cice = ice{i,1};
@@ -1137,7 +1155,7 @@ end
 % lw_nfwalb_byice = {dlw_nfwa_byice.ice0_15;dlw_nfwa_byice.ice15_30;dlw_nfwa_byice.ice30_50;dlw_nfwa_byice.ice50_70;dlw_nfwa_byice.ice70_85;dlw_nfwa_byice.ice85_100}; % Create a cell array with the data for each group
 % tot_nfwalb_byice= {dtot_nfwa_byice.ice0_15;dtot_nfwa_byice.ice15_30;dtot_nfwa_byice.ice30_50;dtot_nfwa_byice.ice50_70;dtot_nfwa_byice.ice70_85;dtot_nfwa_byice.ice85_100}; % Create a cell array with the data for each group
 
-% remove cases that are zero
+% remove cases that are zero (i.e. had no fog layers to begin with)
 sw_fog_byice = {dsw_fog_byice.ice0_15(dsw_fog_byice.ice0_15(:,1)~=0,:);dsw_fog_byice.ice15_30(dsw_fog_byice.ice15_30(:,1)~=0,:);dsw_fog_byice.ice30_50(dsw_fog_byice.ice30_50(:,1)~=0,:);...
                    dsw_fog_byice.ice50_70(dsw_fog_byice.ice50_70(:,1)~=0,:);dsw_fog_byice.ice70_85(dsw_fog_byice.ice70_85(:,1)~=0,:);dsw_fog_byice.ice85_100(dsw_fog_byice.ice85_100(:,1)~=0,:)}; % Create a cell array with the data for each group
 lw_fog_byice = {dlw_fog_byice.ice0_15(dlw_fog_byice.ice0_15(:,1)~=0,:);dlw_fog_byice.ice15_30(dlw_fog_byice.ice15_30(:,1)~=0,:);dlw_fog_byice.ice30_50(dlw_fog_byice.ice30_50(:,1)~=0,:);...
@@ -1145,7 +1163,47 @@ lw_fog_byice = {dlw_fog_byice.ice0_15(dlw_fog_byice.ice0_15(:,1)~=0,:);dlw_fog_b
 tot_fog_byice= {dtot_fog_byice.ice0_15(dtot_fog_byice.ice0_15(:,1)~=0,:);dtot_fog_byice.ice15_30(dtot_fog_byice.ice15_30(:,1)~=0,:);dtot_fog_byice.ice30_50(dtot_fog_byice.ice30_50(:,1)~=0,:);...
                    dtot_fog_byice.ice50_70(dtot_fog_byice.ice50_70(:,1)~=0,:);dtot_fog_byice.ice70_85(dtot_fog_byice.ice70_85(:,1)~=0,:);dtot_fog_byice.ice85_100(dtot_fog_byice.ice85_100(:,1)~=0,:)}; % Create a cell array with the data for each group
 
+% this is merrabase_wAlb - nofog_wAlb
+% does not include numcloud==1
+% sw/lw/tot
+for i = 1:length(unique(iceconcgroup))
+    ice = unique(iceconcgroup); cice = ice{i,1};
+    icelab = strrep(cice, '-', '_');
+    lab = strcat('ice',icelab);
+    dsw_fogonly_byice.(lab)  = dsw_fog(strcmp(iceconcgroup,ice(i))&ncld>1,:);
+    dlw_fogonly_byice.(lab)  = dlw_fog(strcmp(iceconcgroup,ice(i))&ncld>1,:);
+    dtot_fogonly_byice.(lab) = dtot_fog(strcmp(iceconcgroup,ice(i))&ncld>1,:);
+end
 
+% remove cases that are zero (i.e. had no fog layers to begin with) and
+% cases transition from fog to clear
+sw_fogonly_byice = {dsw_fogonly_byice.ice0_15(dsw_fogonly_byice.ice0_15(:,1)~=0,:);dsw_fogonly_byice.ice30_50(dsw_fogonly_byice.ice30_50(:,1)~=0,:);...
+                   dsw_fogonly_byice.ice70_85(dsw_fogonly_byice.ice70_85(:,1)~=0,:);dsw_fogonly_byice.ice85_100(dsw_fogonly_byice.ice85_100(:,1)~=0,:)}; % Create a cell array with the data for each group
+lw_fogonly_byice = {dlw_fogonly_byice.ice0_15(dlw_fogonly_byice.ice0_15(:,1)~=0,:);dlw_fogonly_byice.ice30_50(dlw_fogonly_byice.ice30_50(:,1)~=0,:);...
+                   dlw_fogonly_byice.ice70_85(dlw_fogonly_byice.ice70_85(:,1)~=0,:);dlw_fogonly_byice.ice85_100(dlw_fogonly_byice.ice85_100(:,1)~=0,:)}; % Create a cell array with the data for each group
+tot_fogonly_byice= {dtot_fogonly_byice.ice0_15(dtot_fogonly_byice.ice0_15(:,1)~=0,:);dtot_fogonly_byice.ice30_50(dtot_fogonly_byice.ice30_50(:,1)~=0,:);...
+                   dtot_fogonly_byice.ice70_85(dtot_fogonly_byice.ice70_85(:,1)~=0,:);dtot_fogonly_byice.ice85_100(dtot_fogonly_byice.ice85_100(:,1)~=0,:)}; % Create a cell array with the data for each group
+
+%% wAlb by iceconc for ncld>1
+% sw/lw/tot
+for i = 1:length(unique(iceconcgroup))
+    ice = unique(iceconcgroup); cice = ice{i,1};
+    icelab = strrep(cice, '-', '_');
+    lab = strcat('ice',icelab);
+    sw_wa_mcld_byice.(lab)  = swmerra_wAlb(strcmp(iceconcgroup,ice(i))&ncld>1,:);
+    lw_wa_mcld_byice.(lab)= lwmerra_wAlb(strcmp(iceconcgroup,ice(i))&ncld>1,:);
+    tot_wa_mcld_byice.(lab) = totmerra_wAlb(strcmp(iceconcgroup,ice(i))&ncld>1,:);
+end
+
+%
+sw_byice_wAlb_mcld = {sw_wa_mcld_byice.ice0_15(sw_wa_mcld_byice.ice0_15(:,1)~=0,:);sw_wa_mcld_byice.ice30_50(sw_wa_mcld_byice.ice30_50(:,1)~=0,:);...
+                   sw_wa_mcld_byice.ice70_85(sw_wa_mcld_byice.ice70_85(:,1)~=0,:);sw_wa_mcld_byice.ice85_100(sw_wa_mcld_byice.ice85_100(:,1)~=0,:)}; % Create a cell array with the data for each group
+lw_byice_wAlb_mcld = {lw_wa_mcld_byice.ice0_15(lw_wa_mcld_byice.ice0_15(:,1)~=0,:);lw_wa_mcld_byice.ice30_50(lw_wa_mcld_byice.ice30_50(:,1)~=0,:);...
+                  lw_wa_mcld_byice.ice70_85(lw_wa_mcld_byice.ice70_85(:,1)~=0,:);lw_wa_mcld_byice.ice85_100(lw_wa_mcld_byice.ice85_100(:,1)~=0,:)}; % Create a cell array with the data for each group
+tot_byice_wAlb_mcld= {tot_wa_mcld_byice.ice0_15(tot_wa_mcld_byice.ice0_15(:,1)~=0,:);tot_wa_mcld_byice.ice30_50(tot_wa_mcld_byice.ice30_50(:,1)~=0,:);...
+                   tot_wa_mcld_byice.ice70_85(tot_wa_mcld_byice.ice70_85(:,1)~=0,:);tot_wa_mcld_byice.ice85_100(tot_wa_mcld_byice.ice85_100(:,1)~=0,:)}; % Create a cell array with the data for each group
+
+               
 %% delta_walbnoFog - merrabase by intwc/intThick/top/bot
 % sw/lw/tot
 sw_plot={};sw_plot_={};sw_plot__={};
@@ -1972,7 +2030,34 @@ for kkk=1:length(param)
     ylim([-300 150]);  
     hold on; line(0:5,zeros(6,1),'Color','k','linewidth',1,'LineStyle',':')
 end    
+%% plot surface CRE vs. LWP/cldbot, with sea ice conc/sza
+figure(123)
+sza4prof = sza(1:4:end);
+scatter3(cldbot,swmerra_wAlb(:,1),iceconc,24,iceconc,'filled');
+axis([0 1000 -200 50 -5 100]);
 
+
+figure(1231)
+sza4prof = sza(1:4:end);
+scatter3(swmerra_wAlb(:,1),anaLTS,iceconc,24,iceconc,'filled');
+axis([-200 50 5 30 -5 100]);
+xlabel('SW CRE [W/m^{2}]');ylabel('LTS (MERRA)');zlabel('Ice conc (%)');
+
+figure(1232)
+sza4prof = sza(1:4:end);
+scatter3(lwmerra_wAlb(:,1),anaLTS,iceconc,24,iceconc,'filled');
+axis([40 80 5 30 -5 100]);
+xlabel('LW CRE [W/m^{2}]');ylabel('LTS (MERRA)');zlabel('Ice conc (%)');
+
+
+figure(1234)
+scatter3(cldbot,lwmerra_wAlb(:,1),sza4prof,24,sza4prof,'filled');
+axis([-5 800 40 85 60 80]);
+xlabel('CBH [m]');ylabel('LW CRE [W/m^{2}]');zlabel('SZA');
+figure(12341)
+scatter3(cldbot,swmerra_wAlb(:,1),sza4prof,24,sza4prof,'filled');
+axis([-5 800 -200 50 60 80]);
+xlabel('CBH [m]');ylabel('SW CRE [W/m^{2}]');zlabel('SZA');
 %% plot merra
 
 % sw/lw/tot
@@ -2278,36 +2363,100 @@ set(gcf,'color','white');
         
         
 %% noFogwAlb-MerrabasewAlb to extract fog layer influence above weighted ice
+% this includes all fog layers, even when the fog is the only cloud layer
+% (i.e. change from cloud to clear)
 figure(888);
 % SW CRE delta by ice for wAlbnoFog versus wAlb case
 ax2(1)=subplot(311);
 aboxplot(sw_fog_byice,'labels',{'Surface', 'C-130','TOA'},'colorgrad','blue_down'); % Advanced box plot
 ylabel('\Delta SW CRE [W/m^{2}]'); % Set the X-axis label
 legend('ice 0-15 [%]','ice 15-30 [%]','ice 30-50 [%]','ice 50-70 [%]','ice 70-85 [%]','ice 85-100 [%]','Orientation','horizontal'); % Add a legend
-ylim([-50 100]);title('\Delta noFogwAlb - MERRABASEwAlb');
+ylim([-200 100]);title('\Delta MERRABASEwAlb - noFogwAlb');
 set(gca,'XTickLabel',{' '})
 % LW delta by ice for fog case
 ax2(2)=subplot(312);
 aboxplot(lw_fog_byice,'labels',{'Surface', 'C-130','TOA'},'colorgrad','red_down'); % Advanced box plot
 ylabel('\Delta LW CRE [W/m^{2}]'); % Set the X-axis label
 legend('ice 0-15 [%]','ice 15-30 [%]','ice 30-50 [%]','ice 50-70 [%]','ice 70-85 [%]','ice 85-100 [%]','Orientation','horizontal'); % Add a legend
-ylim([-100 50]);
+ylim([-50 150]);
 set(gca,'XTickLabel',{' '})
 % Total delta by ice for fog case
 ax2(3)=subplot(313);
 aboxplot(tot_fog_byice,'labels',{'Surface', 'C-130','TOA'},'colorgrad','green_down'); % Advanced box plot
 ylabel('\Delta Total CRE [W/m^{2}]'); % Set the X-axis label
 legend('ice 0-15 [%]','ice 15-30 [%]','ice 30-50 [%]','ice 50-70 [%]','ice 70-85 [%]','ice 85-100 [%]','Orientation','horizontal'); % Add a legend
-ylim([-50 100]);
+ylim([-200 100]);
 set(gcf,'color','white');
-
+linkaxes(ax2,'x');
 % tight subplots
 % p(i,:) = get(ax(i), 'position');
 %% save figure 888
         fi=[strcat('F:\ARISE\ArcticCRF\figures\', 'deltaCREbyice_fog_20150406')];
         save_fig(888,fi,true);
 
+%% noFogwAlb-MerrabasewAlb to extract fog layer influence above weighted ice
+% this includes only fog layers that are part of a greater cloud system (i.e. more than 1)
+
+figure(8881);
+% SW CRE delta by ice for wAlbnoFog versus wAlb case
+ax2(1)=subplot(311);
+aboxplot(sw_fogonly_byice,'labels',{'Surface', 'C-130','TOA'},'colorgrad','blue_down'); % Advanced box plot
+ylabel('\Delta SW CRE [W/m^{2}]'); % Set the X-axis label
+legend('ice 0-15 [%]','ice 30-50 [%]','ice 70-85 [%]','ice 85-100 [%]','Orientation','horizontal'); % Add a legend
+ylim([-100 50]);title('\Delta MERRABASEwAlb - noFogwAlb');
+set(gca,'XTickLabel',{' '})
+% LW delta by ice for fog case
+ax2(2)=subplot(312);
+aboxplot(lw_fogonly_byice,'labels',{'Surface', 'C-130','TOA'},'colorgrad','red_down'); % Advanced box plot
+ylabel('\Delta LW CRE [W/m^{2}]'); % Set the X-axis label
+legend('ice 0-15 [%]','ice 30-50 [%]','ice 70-85 [%]','ice 85-100 [%]','Orientation','horizontal'); % Add a legend
+ylim([-50 100]);
+set(gca,'XTickLabel',{' '})
+% Total delta by ice for fog case
+ax2(3)=subplot(313);
+aboxplot(tot_fogonly_byice,'labels',{'Surface', 'C-130','TOA'},'colorgrad','green_down'); % Advanced box plot
+ylabel('\Delta Total CRE [W/m^{2}]'); % Set the X-axis label
+legend('ice 0-15 [%]','ice 30-50 [%]','ice 70-85 [%]','ice 85-100 [%]','Orientation','horizontal'); % Add a legend
+ylim([-100 50]);
+set(gcf,'color','white');
+linkaxes(ax2,'x');
+% tight subplots
+% p(i,:) = get(ax(i), 'position');
+
+%% save figure 8881
+        fi=[strcat('F:\ARISE\ArcticCRF\figures\', 'deltaCREbyice_fog_mcld_20150512')];
+        save_fig(8881,fi,true);    
         
+%% MERAA_wAlb for ncld>1
+figure(8882);
+% SW CRE delta by ice for wAlbnoFog versus wAlb case
+ax2(1)=subplot(311);
+aboxplot(sw_byice_wAlb_mcld,'labels',{'Surface', 'C-130','TOA'},'colorgrad','blue_down'); % Advanced box plot
+ylabel('SW CRE [W/m^{2}]'); % Set the X-axis label
+legend('ice 0-15 [%]','ice 30-50 [%]','ice 70-85 [%]','ice 85-100 [%]','Orientation','horizontal'); % Add a legend
+ylim([-250 100]);title('MERRABASEwAlb');
+set(gca,'XTickLabel',{' '})
+% LW delta by ice for fog case
+ax2(2)=subplot(312);
+aboxplot(lw_byice_wAlb_mcld,'labels',{'Surface', 'C-130','TOA'},'colorgrad','red_down'); % Advanced box plot
+ylabel('LW CRE [W/m^{2}]'); % Set the X-axis label
+legend('ice 0-15 [%]','ice 30-50 [%]','ice 70-85 [%]','ice 85-100 [%]','Orientation','horizontal'); % Add a legend
+ylim([-50 150]);
+set(gca,'XTickLabel',{' '})
+% Total delta by ice for fog case
+ax2(3)=subplot(313);
+aboxplot(tot_byice_wAlb_mcld,'labels',{'Surface', 'C-130','TOA'},'colorgrad','green_down'); % Advanced box plot
+ylabel('Total CRE [W/m^{2}]'); % Set the X-axis label
+legend('ice 0-15 [%]','ice 30-50 [%]','ice 70-85 [%]','ice 85-100 [%]','Orientation','horizontal'); % Add a legend
+ylim([-200 100]);
+set(gcf,'color','white');
+linkaxes(ax2,'x');
+% tight subplots
+% p(i,:) = get(ax(i), 'position');
+
+%% save figure 8881
+        fi=[strcat('F:\ARISE\ArcticCRF\figures\', 'CREbyice_wAlb_fog_mcld_20150512')];
+        save_fig(8882,fi,true);        
 %% MerrabasewAlb by ice
 figure(999);
 % SW CRE  by ice for wAlb case
@@ -2378,6 +2527,7 @@ for i = 1:length(unique(allcld_iceconcgroup))
     lab = strcat('ice',icelab);
     reff.(lab)      = allcld_cldref(strcmp(allcld_iceconcgroup,ice(i)),:);
     wc.(lab)        = allcld_cldwc(strcmp(allcld_iceconcgroup,ice(i)),:);
+    wp.(lab)        = allcld_cldwp(strcmp(allcld_iceconcgroup,ice(i)),:);
     cldthick.(lab)  = allcld_cldthick(strcmp(allcld_iceconcgroup,ice(i)),:);
     hcldtop.(lab)   = allcld_cldtop(strcmp(allcld_iceconcgroup,ice(i)),:);
     hcldbot.(lab)   = allcld_cldbot(strcmp(allcld_iceconcgroup,ice(i)),:);
@@ -2385,6 +2535,7 @@ for i = 1:length(unique(allcld_iceconcgroup))
 end
 hreff = {reff.ice0_15;reff.ice15_30;reff.ice30_50;reff.ice50_70;reff.ice70_85;reff.ice85_100}; % Create a cell array with the data for each group
 hwc   = {wc.ice0_15;wc.ice15_30;wc.ice30_50;wc.ice50_70;wc.ice70_85;wc.ice85_100};
+hwp   = {wp.ice0_15;wp.ice15_30;wp.ice30_50;wp.ice50_70;wp.ice70_85;wp.ice85_100};
 hcldthick = {cldthick.ice0_15;cldthick.ice15_30;cldthick.ice30_50;cldthick.ice50_70;cldthick.ice70_85;cldthick.ice85_100};
 hhcldtop = {hcldtop.ice0_15;hcldtop.ice15_30;hcldtop.ice30_50;hcldtop.ice50_70;hcldtop.ice70_85;hcldtop.ice85_100};
 hhcldbot = {hcldbot.ice0_15;hcldbot.ice15_30;hcldbot.ice30_50;hcldbot.ice50_70;hcldbot.ice70_85;hcldbot.ice85_100};
@@ -2431,13 +2582,14 @@ ax3(1)=subplot(511);
 aboxplot(hreff,'colorgrad','red_up'); % Advanced box plot
 ylabel('R_{eff} [\mum]'); % Set the X-axis label
 set(gca,'XTickLabel',{' '});set(gca,'XTick',[])
-ylim([5 50]);xlim([0.6 1.4]);
+ylim([5 40]);xlim([0.6 1.4]);
 ax3(2)=subplot(512);
-aboxplot(hwc,'colorgrad','blue_up');
+aboxplot(hwp,'colorgrad','blue_up');
                %'colorgrad','red_down','colorrev','true'); % Advanced box plot
-ylabel('CWC [g/m^{3}]]'); % Set the X-axis label
+ylabel('CWP [g/m^{2}]]'); % Set the X-axis label
 set(gca,'XTickLabel',{' '});set(gca,'XTick',[])
-ylim([0 2.5]);xlim([0.6 1.4]);
+ylim([0 100]);%ylim([0 2.5]);this is for wc
+xlim([0.6 1.4]);
 ax3(3)=subplot(513);
 aboxplot(hcldthick,'colorgrad','green_up');
                %'colorgrad','red_down','colorrev','true'); % Advanced box plot
@@ -2449,24 +2601,82 @@ aboxplot(hhcldtop,'colorgrad','orange_up');
                %'colorgrad','red_down','colorrev','true'); % Advanced box plot
 ylabel('CTH [m]'); % Set the X-axis label
 set(gca,'XTickLabel',{' '});set(gca,'XTick',[])
-ylim([0 3000]);xlim([0.6 1.4]);
+ylim([0 2500]);xlim([0.6 1.4]);
 ax3(5)=subplot(515);
 aboxplot(hhcldbot,'colorgrad','orange_down');
                %'colorgrad','red_down','colorrev','true'); % Advanced box plot
 ylabel('CBH [m]'); % Set the X-axis label
 set(gca,'XTickLabel',{' '});set(gca,'XTick',[])
-ylim([0 2000]);xlim([0.6 1.4]);
+ylim([0 1500]);xlim([0.6 1.4]);
 xl = get(gca,'xlim');
 xtixloc = [0.70:0.12:1.35];      %  label locations
 %xtixloc = [0.72 0.82 0.94 1.06 1.16 1.28];
 set(gca,'XTickMode','auto','XTickLabel',{'ice 0-15 [%]','ice 15-30 [%]','ice 30-50 [%]','ice 50-70 [%]','ice 70-85 [%]','ice 85-100 [%]'},'XTick',xtixloc);
 xlim([0.6 1.4]);set(gca,'TickLength',[0,0])
 %% save figure 888
-        fi=[strcat('F:\ARISE\ArcticCRF\figures\', 'cld_properties_by_iceconc_20150323')];
+        fi=[strcat('F:\ARISE\ArcticCRF\figures\', 'cld_properties_by_iceconc_20150512')];
         save_fig(888,fi,true);
 
 
-        
+%% create profile cloud properties per ice conc
+figure(2222);
+ax(1)=subplot(511);
+plot(iceconc,anaLTS,   'p','color',[0.2 0.8 0.2],'markerfacecolor',[0.2 0.8 0.2]);hold on;
+plot(iceconc,anaLLSS,'p','color',[0.2 0.8 0.2]);hold on;
+ax(2)=subplot(512);
+plot(iceconc,intthick, 'p','color',[0.5 0.2 0.2],'markerfacecolor',[0.5 0.2 0.2]);hold on;
+ax(3)=subplot(513);
+plot(iceconc,int_lwp,  'p','color',[0.2 0.2 0.8],'markerfacecolor',[0.2 0.2 0.8]);hold on;
+ax(4)=subplot(514);
+plot(iceconc,cldbot,   's','color',[0.2 0.8 0.8],'markerfacecolor',[0.2 0.8 0.8]);hold on;
+ax(5)=subplot(515);
+plot(iceconc,cldbot,   's','color',[0.8 0.8 0.2],'markerfacecolor',[0.8 0.8 0.2]);hold on;
+
+
+%plot(iceconc,airLTS,'o','color',[0.2 0.2 0.8],'markerfacecolor',[0.2 0.8 0.2]);hold on;
+%plot(iceconc,anaLTS,'o','color',[0.2 0.2 0.8]);hold on;
+
+%% create all cloud properties per ice conc
+figure(3333);
+ax(1)=subplot(311);
+plot(allcld_iceconc,allcld_cldref,   'p','color',[0.8 0.5 0.2],'markerfacecolor',[0.8 0.5 0.2]);hold on;
+axis([0 100 0 40]);
+ax(2)=subplot(312);
+plot(allcld_iceconc,allcld_cldthick, 'p','color',[0.5 0.2 0.2],'markerfacecolor',[0.5 0.2 0.2]);hold on;
+axis([0 100 0 1500]);
+ax(3)=subplot(313);
+plot(allcld_iceconc(allcld_cldwp~=40),allcld_cldwp(allcld_cldwp~=40),  'p','color',[0.2 0.2 0.8],'markerfacecolor',[0.2 0.2 0.8]);hold on;
+
+% 30-50% ice
+indall30_50 = find(allcld_iceconc>=30 & allcld_iceconc<=50);
+dateall_30_50 = allcld_date(indall30_50);
+profall_30_50 = allcld_profile(indall30_50);
+crefall_30_50 = allcld_cldref(indall30_50);
+
+ind30_50 = find(iceconc>=30 & iceconc<=50);
+date_30_50 = date(ind30_50);
+prof_30_50 = profile(ind30_50);
+lwp_30_50  = int_lwp(ind30_50);
+analts_30_50  = anaLTS(ind30_50);
+airlts_30_50  = airLTS(ind30_50);
+anallss_30_50  = anaLLSS(ind30_50);
+airllss30_50  = airLLSS(ind30_50);
+
+% 50-70% ice
+indall50_70 = find(allcld_iceconc>=50 & allcld_iceconc<=70);
+dateall_50_70 = allcld_date(indall50_70);
+profall_50_70 = allcld_profile(indall50_70);
+crefall_50_70 = allcld_cldref(indall50_70);
+
+ind50_70 = find(iceconc>=50 & iceconc<=70);
+date_50_70 = date(ind50_70);
+prof_50_70 = profile(ind50_70);
+lwp_50_70  = int_lwp(ind50_70);
+analts_50_70  = anaLTS(ind50_70);
+airlts_50_70  = airLTS(ind50_70);
+anallss_50_70  = anaLLSS(ind50_70);
+airllss50_70  = airLLSS(ind50_70);
+
 %% plot versus various params
 figure(444);
 axx(1)=subplot(311);
