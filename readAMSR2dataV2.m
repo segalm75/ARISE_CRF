@@ -35,9 +35,10 @@
 %
 % MODIFICATION HISTORY:
 % Written: Michal Segal-Rozenhaimer (MS), NASA Ames,Feb-10-2015
+% MS, 2015-05-17, V2 takes only one date from readMERRA
 % -------------------------------------------------------------------------
 %% function routine
-function out = readAMSR2data(daystr)
+function out = readAMSR2dataV2(daystr)
 
 startup_plotting; 
 movie = false;
@@ -53,10 +54,10 @@ gridfile = strcat(adir,'LongitudeLatitudeGrid-n3125-NorthWestPassage.hdf');
 if movie
     mov(length(daystr)) = struct('cdata',[],'colormap',[]);
 end
-for i=1:length(daystr)
+%for i=1:length(daystr)
     
-    datafile = strcat(adir,'asi-AMSR2-n3125-',daystr{:,i},'.hdf');
-    
+    %datafile = strcat(adir,'asi-AMSR2-n3125-',daystr{:,i},'.hdf');
+    datafile = strcat(adir,'asi-AMSR2-n3125-',daystr,'.hdf');
 
     d.iceconc = double(hdfread(datafile,'/ASI Ice Concentration')); 
     d.longrid = double(hdfread(gridfile,'/Longitudes')); 
@@ -135,43 +136,43 @@ for i=1:length(daystr)
     
     
     % plot steps
-    figure(1);
-    ax1(1)=subplot(1,2,1)
-    surf((d.longrid),(d.latgrid),(d.iceconc),'FaceColor','interp',...
-             'EdgeColor','none');view(2);
-    title('Original Ice concentration map');
-    ax1(2)=subplot(1,2,2)
-    surf((d.longrid),(d.latgrid),(I_smooth),'FaceColor','interp',...
-             'EdgeColor','none');view(2);
-    title(['Gaussian filtered image', ' \sigma = ', num2str(sig), ' Kernel = ', num2str(kernel)]);
-    linkaxes(ax1,'xy');
-    close(1);
-    
-    figure(2);
-%     ax1(3)=subplot(1,3,3)
-%     gall = g(:);
-%     ggood= gall==1;
-%     lon  = d.longrid(:);
-%     lat  = d.latgrid(:);
-%     plot3(lon(ggood),lat(ggood),gall(ggood),'.');
-    surf((d.longrid),(d.latgrid),(d.Im),'FaceColor','interp',...
-             'EdgeColor','none');view(2);colormap('Gray');
-    title('gradient magnitude Im');colorbar;
-    close(2);
-    
+%     figure(1);
+%     ax1(1)=subplot(1,2,1)
+%     surf((d.longrid),(d.latgrid),(d.iceconc),'FaceColor','interp',...
+%              'EdgeColor','none');view(2);
+%     title('Original Ice concentration map');
+%     ax1(2)=subplot(1,2,2)
+%     surf((d.longrid),(d.latgrid),(I_smooth),'FaceColor','interp',...
+%              'EdgeColor','none');view(2);
+%     title(['Gaussian filtered image', ' \sigma = ', num2str(sig), ' Kernel = ', num2str(kernel)]);
+%     linkaxes(ax1,'xy');
+%     close(1);
+%     
+%     figure(2);
+% %     ax1(3)=subplot(1,3,3)
+% %     gall = g(:);
+% %     ggood= gall==1;
+% %     lon  = d.longrid(:);
+% %     lat  = d.latgrid(:);
+% %     plot3(lon(ggood),lat(ggood),gall(ggood),'.');
+%     surf((d.longrid),(d.latgrid),(d.Im),'FaceColor','interp',...
+%              'EdgeColor','none');view(2);colormap('Gray');
+%     title('gradient magnitude Im');colorbar;
+%     close(2);
+%     
     
     % create gradient line
     d.Ith = d.th.*(d.Im>12);
-    figure(3);
-    contour3((d.longrid),(d.latgrid),(d.Ith),'k');
-    axis([-180 -100 70 85 0 100]);
-    set(gca,'Ytick',70:2.5:85);
-        set(gca,'YTickLabel',{'70.0','72.5','75.0',...
-            '77.5','80.0','82.5','85.0'});
-        xlabel('Longitude','FontSize',12);ylabel('Latitude','FontSize',12);
-        title(['ice edge ' daystr]);
-    close(3);
-    
+%     figure(3);
+%     contour3((d.longrid),(d.latgrid),(d.Ith),'k');
+%     axis([-180 -100 70 85 0 100]);
+%     set(gca,'Ytick',70:2.5:85);
+%         set(gca,'YTickLabel',{'70.0','72.5','75.0',...
+%             '77.5','80.0','82.5','85.0'});
+%         xlabel('Longitude','FontSize',12);ylabel('Latitude','FontSize',12);
+%         title(['ice edge ' daystr]);
+%     close(3);
+%     
     % contour plots
     if cplots
         figure;
@@ -189,11 +190,11 @@ for i=1:length(daystr)
         %contour(d.longrid,d.latgrid,d.iceconc), hold on, 
         %quiver(d.longrid,d.latgrid,px,py),      hold off
     end
-    out.(strcat('amsr',daystr{:,i})) = d;
+    out.(strcat('amsr',daystr)) = d;
     clear d;
-end
+%end
 %% save processed struct
-si = [adir,'AMSR2_wgrad_',daystr{:,1},'_',daystr{:,end},'.mat'];
+si = [adir,'AMSR2_wgrad_',daystr,'.mat'];
 disp(['saving to ' si]);
 save(si,'-struct','out');
 return;
