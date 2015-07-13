@@ -1,6 +1,6 @@
 %% Details of the function:
 % NAME:
-% readMERRA(files2process,plotting)
+% readMERRAcombinedProducts(files2process,plotting)
 %----------------------------------
 % PURPOSE:
 %   read inst6_3d_ana_Np MERRA product
@@ -10,14 +10,36 @@
 %   http://disc.sci.gsfc.nasa.gov/daac-bin/FTPSubset.pl?LOOKUPID_List=MAI3CPASM
 %   files2process is a switch to process 1 single file (0) or the whole
 %   directory (1); plotting is false or true to show plots
+%   combine with  inst3_3d_asm_Cp (lower spatial resolution)
+%   for the appropriate grid and time (time is 18:00Z to comply with
+%   closest C130 flight time)
 %   
 %
 % CALLING SEQUENCE:
 %  out = readMERRA(files2process,plotting)
 %
 % INPUT:
-%  - MERRA300.prod.assim.inst6_3d_ana_Np.yyyymmdd.SUB.hdf file
-%  - files under: F:\ARISE\ArcticCRF\METdata\Sep2014\ARISEdomain\
+%  - MERRA300.prod.assim.inst3_3d_asm_Cp.20140902.SUB.hdf file for Omega
+%  - folder:F:\ARISE\ArcticCRF\METdata\Sep2014\Cp_ARISEdomain_1800ZZ_2100ZZ_42levels\
+%
+% fields in file:
+% SLP = Sea-level pressure
+% PS = Surface pressure
+% PHIS = Surface Geopotential
+% H = Geopotential Height
+% O3 = Ozone mixing ratio
+% QV = Specific humidity
+% QL = Cloud liquid water mixing ratio
+% QI = Cloud ice mixing ratio
+% RH = Relative Humidity
+% T = Air Temperature
+% U = Eastward wind component
+% V = Northward wind component
+% EPV = Ertel potential vorticity
+% OMEGA = Vertical pressure velocity
+%
+%  - MERRA300.prod.assim.inst6_3d_ana_Np.20140901.SUB.hdf file for all par
+%  - files under: F:\ARISE\ArcticCRF\METdata\Sep2014\4times\
 % 
 % 
 % OUTPUT:
@@ -47,7 +69,7 @@
 % Written: Michal Segal-Rozenhaimer (MS), NASA Ames,Jan-21-2015
 % -------------------------------------------------------------------------
 %% function routine
-function out = readMERRA
+function out = readMERRAcombinedProducts
 
 %% choose input directory or file
 % ------------------------------ %
@@ -57,21 +79,32 @@ function out = readMERRA
   plotting      = 'false';
 % end
 
-infile = getfullname__('MERRA300.prod.assim.inst6_3d_ana_Np.*.SUB.hdf','F:','Select a MERRA* file');
-[pname, fname, ext] = fileparts(infile);
-pname = [pname, filesep];
+infileNp = getfullname__('MERRA300.prod.assim.inst6_3d_ana_Np.*.SUB.hdf','F:','Select a MERRA* file');
+[pnameNp, fnameNp, ext] = fileparts(infileNp);
+pnameNp = [pnameNp, filesep];
+
+infileCp = getfullname__('MERRA300.prod.assim.inst3_3d_asm_Cp.*.SUB.hdf','F:','Select a MERRA* file');
+[pnameCp, fnameCp, ext] = fileparts(infileCp);
+pnameCp = [pnameCp, filesep];
 
 if files2process==0
-    fileinfo = hdfinfo(infile);
-    dm    = strsplit(fname,'.');
+    fileinfoNp = hdfinfo(infileNp);
+    dm    = strsplit(fnameNp,'.');
     dates = dm(4);
-    allfiles.name = [fname,ext];
+    allfilesNp.name = [fnameNp,ext];
 else
-    allfiles = dir([pname,'MERRA300.prod.assim.inst6_3d_ana_Np.*.SUB.hdf']);
-    for i=1:length(allfiles)
-        dm{i} = strsplit_ms(allfiles(i).name,'.');
+    allfilesNp = dir([pnameNp,'MERRA300.prod.assim.inst6_3d_ana_Np.*.SUB.hdf']);
+    for i=1:length(allfilesNp)
+        dm{i} = strsplit_ms(allfilesNp(i).name,'.');
         dates(i) = dm{i}(4);
-        fileinfo = hdfinfo([pname,allfiles(i).name]);
+        fileinfoNp = hdfinfo([pnameNp,allfilesNp(i).name]);
+    end
+    
+    allfilesCp = dir([pnameCp,'MERRA300.prod.assim.inst3_3d_asm_Cp.*.SUB.hdf']);
+    for i=1:length(allfilesCp)
+        dm{i} = strsplit_ms(allfilesCp(i).name,'.');
+        dates(i) = dm{i}(4);
+        fileinfoCp = hdfinfo([pnameCp,allfilesCp(i).name]);
     end
 end
 % some conversion constants %
@@ -88,28 +121,37 @@ R    = 287.05;          % gas constant J/(kgK)
 for i=1:length(dates)-1
     
     datest = strcat('m',dates{:,i},'_'); 
-    out.(datest).longitude = double(hdfread([pname,allfiles(i).name],'/longitude')); p =length(out.(datest).longitude);
-    out.(datest).latitude  = double(hdfread([pname,allfiles(i).name],'/latitude'));  q =length(out.(datest).latitude);
-    out.(datest).sealevelp = double(hdfread([pname,allfiles(i).name],'/slp'));            %[Pa-2D]
-    out.(datest).surfpress = double(hdfread([pname,allfiles(i).name],'/ps'));             %[Pa-3D]
-    out.(datest).plevels   = double(hdfread([pname,allfiles(i).name],'/levels'));    s =length(out.(datest).plevels);%[hPa];
-    out.(datest).geopothgt = double(hdfread([pname,allfiles(i).name],'/h'));              %[m-3D]
-    out.(datest).airT      = double(hdfread([pname,allfiles(i).name],'/t'));              %[K-3D]
-    out.(datest).eastwind  = double(hdfread([pname,allfiles(i).name],'/u'));              %[m/s-3D]
-    out.(datest).northwind = double(hdfread([pname,allfiles(i).name],'/v'));              %[m/s-3D]
-    out.(datest).watermmr  = double(hdfread([pname,allfiles(i).name],'/qv'));             %[kg/kg-3D] specific humidity
-    out.(datest).ozonemmr  = double(hdfread([pname,allfiles(i).name],'/o3'));             %[kg/kg-3D] ozone mixing ratio
+    time      = double(hdfread([pnameNp,allfilesNp(i).name],'/time'));
+    longitude = double(hdfread([pnameNp,allfilesNp(i).name],'/longitude')); p =length(longitude);
+    latitude  = double(hdfread([pnameNp,allfilesNp(i).name],'/latitude'));  q =length(latitude);
+    sealevelp = double(hdfread([pnameNp,allfilesNp(i).name],'/slp'));            %[Pa-2D]
+    surfpress = double(hdfread([pnameNp,allfilesNp(i).name],'/ps'));             %[Pa-3D]
+    plevels   = double(hdfread([pnameNp,allfilesNp(i).name],'/levels'));    s =length(plevels);%[hPa];
+    geopothgt = double(hdfread([pnameNp,allfilesNp(i).name],'/h'));              %[m-3D]
+    airT      = double(hdfread([pnameNp,allfilesNp(i).name],'/t'));              %[K-3D]
+    eastwind  = double(hdfread([pnameNp,allfilesNp(i).name],'/u'));              %[m/s-3D]
+    northwind = double(hdfread([pnameNp,allfilesNp(i).name],'/v'));              %[m/s-3D]
+    watermmr  = double(hdfread([pnameNp,allfilesNp(i).name],'/qv'));             %[kg/kg-3D] specific humidity
+    ozonemmr  = double(hdfread([pnameNp,allfilesNp(i).name],'/o3'));             %[kg/kg-3D] ozone mixing ratio
+    
+    timeCp     = double(hdfread([pnameCp,allfilesCp(i).name],'/time'));           % Cp file times
+    longitudeCp= double(hdfread([pnameCp,allfilesCp(i).name],'/longitude'));      % Cp file longitudes
+    latitudeCp = double(hdfread([pnameCp,allfilesCp(i).name],'/latitude'));       % Cp file latitudes
+    omega      = double(hdfread([pnameCp,allfilesCp(i).name],'/omega'));          %[Pa/s] vertical pressure velocity
     
                                                            
 % choose one time
-%      out.(strcat('m',dates{:,i},'_')).sealevelp = squeeze(out.(strcat('m',dates{:,i},'_')).sealevelp(end,:,:));  % take only 18:00UTC
-%      out.(strcat('m',dates{:,i},'_')).surfpress = squeeze(out.(strcat('m',dates{:,i},'_')).surfpress(end,:,:));  % take only 18:00UTC
-%      out.(strcat('m',dates{:,i},'_')).geopothgt = squeeze(out.(strcat('m',dates{:,i},'_')).geopothgt(end,:,:,:));% take only 18:00UTC
-%      out.(strcat('m',dates{:,i},'_')).airT      = squeeze(out.(strcat('m',dates{:,i},'_')).airT(end,:,:,:));     % take only 18:00UTC
-%      out.(strcat('m',dates{:,i},'_')).eastwind  = squeeze(out.(strcat('m',dates{:,i},'_')).eastwind(end,:,:,:)); % take only 18:00UTC
-%      out.(strcat('m',dates{:,i},'_')).northwind = squeeze(out.(strcat('m',dates{:,i},'_')).northwind(end,:,:,:));% take only 18:00UTC
-%      out.(strcat('m',dates{:,i},'_')).watermmr  = squeeze(out.(strcat('m',dates{:,i},'_')).watermmr(end,:,:,:)); % take only 18:00UTC
-%      out.(strcat('m',dates{:,i},'_')).ozonemmr  = squeeze(out.(strcat('m',dates{:,i},'_')).ozonemmr(end,:,:,:)); % take only 18:00UTC
+     out.(datest).longitude = squeeze(out.(datest).sealevelp(end,:,:));  % take only 18:00UTC
+     out.(datest).latitude  = squeeze(out.(datest).surfpress(end,:,:));  % take only 18:00UTC
+     out.(datest).sealevelp = squeeze(out.(datest).sealevelp(end,:,:));  % take only 18:00UTC
+     out.(datest).surfpress = squeeze(out.(datest).surfpress(end,:,:));  % take only 18:00UTC
+     out.(datest).geopothgt = squeeze(out.(datest).geopothgt(end,:,:,:));% take only 18:00UTC
+     out.(datest).plevels   = squeeze(out.(datest).airT(    end,:,:,:)); % take only 18:00UTC
+     out.(datest).airT      = squeeze(out.(datest).airT(    end,:,:,:)); % take only 18:00UTC
+     out.(datest).eastwind  = squeeze(out.(datest).eastwind(end,:,:,:)); % take only 18:00UTC
+     out.(datest).northwind = squeeze(out.(datest).northwind(end,:,:,:));% take only 18:00UTC
+     out.(datest).watermmr  = squeeze(out.(datest).watermmr(end,:,:,:)); % take only 18:00UTC
+     out.(datest).ozonemmr  = squeeze(out.(datest).ozonemmr(end,:,:,:)); % take only 18:00UTC
      
     % replace missiing values with NaN
     out.(datest).sealevelp ( out.(datest).sealevelp >9E14) = NaN;
@@ -247,7 +289,7 @@ for i=1:length(dates)-1
                                 ' avgSurfP=',num2str(avgsurfpress),'±',num2str(stdsurfpress)]);
         set(ts(i),'FontSize',12,'color','k');
         set(gca,'fontsize',12);grid on;
-        fi=[strcat(pname, dates{:,i}, 'avgTdomain')];
+        fi=[strcat(pnameNp, dates{:,i}, 'avgTdomain')];
         save_fig(i,fi,false);
         
         % plot parameters versus pressure levels
@@ -343,7 +385,7 @@ if strcmp(plotting,'true')
      p3(1) = p2(1) + p2(3) +p2(3)/8;
      set(ax(2), 'position', p2)
      set(ax(3), 'position', p3);
-     fi=[strcat(pname, 'Sep2014', 'avgTdomain3subplotVsPst')];
+     fi=[strcat(pnameNp, 'Sep2014', 'avgTdomain3subplotVsPst')];
      save_fig(1000,fi,true);
      % get subplot locations:
      % [left, bottom, width, height].
@@ -355,7 +397,7 @@ if strcmp(plotting,'true')
      p3a(1) = p2a(1) + p2a(3) +p2a(3)/8;
      set(ax1(2), 'position', p2a)
      set(ax1(3), 'position', p3a);
-     fi=[strcat(pname, 'Sep2014', 'avgTdomain3subplotVsAlt')];
+     fi=[strcat(pnameNp, 'Sep2014', 'avgTdomain3subplotVsAlt')];
      save_fig(1001,fi,true);
 end
 %%
@@ -606,7 +648,7 @@ end
 %%
 out.dates = dates;
 %% save processed struct
-si = [pname,'MERRAreanalysis_',dates{:,1},'_',dates{:,end},'_','avgLon',num2str(avgLon),'_','avgLat',num2str(avgLat),'.mat'];
+si = [pnameNp,'MERRAreanalysis_',dates{:,1},'_',dates{:,end},'_','avgLon',num2str(avgLon),'_','avgLat',num2str(avgLat),'.mat'];
 disp(['saving to ' si]);
 save(si,'-struct','out');
 return;

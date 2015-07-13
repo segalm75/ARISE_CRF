@@ -88,6 +88,7 @@ R    = 287.05;          % gas constant J/(kgK)
 for i=1:length(dates)-1
     
     datest = strcat('m',dates{:,i},'_'); 
+    out.(datest).time      = double(hdfread([pname,allfiles(i).name],'/time'));
     out.(datest).longitude = double(hdfread([pname,allfiles(i).name],'/longitude')); p =length(out.(datest).longitude);
     out.(datest).latitude  = double(hdfread([pname,allfiles(i).name],'/latitude'));  q =length(out.(datest).latitude);
     out.(datest).sealevelp = double(hdfread([pname,allfiles(i).name],'/slp'));            %[Pa-2D]
@@ -562,7 +563,8 @@ if strcmp(plotting,'true')
                     % Title: Days 1:31 inclusive. 20140901 to 20141001
                     date = datenum(2014, 09, 01) + j-1;   % Convert t into serial numbers
                     str = datestr(date, 'dd mmm yyyy'); % Show in the format
-                    max_ws  = max(max(max(U)),max(max(V)));
+                    max_ws = sqrt(max(max(U)^2 + max(max(V)^2)));
+                    %max_ws = max(max(max(U)),max(max(V)));
                     
                     set(gca,'fontsize',12);
                     title([str,' Max wind speed [m/s] = ',num2str(round(max_ws*100)/100)]);
