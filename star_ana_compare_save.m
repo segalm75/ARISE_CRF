@@ -40,12 +40,10 @@
 % Written: Michal Segal-Rozenhaimer (MS), NASA Ames,Feb-02-2015
 % MS, 2015-02-24, added calculations of cloud profiles
 % MS, 2015-02-25, added calculation of atm profiles
-% MS, 2015-09-21, corrected LTS plots and added 850 mbar
-%                 added save options of atm profiles from aircraft
-%                 added saved east and north winds from reanalysis
+% MS, 2015-09-21, added options to save profiles for plotting
 % -------------------------------------------------------------------------
 %% function routine
-function out = star_ana_compare
+function out = star_ana_compare_save
 clear all; close all;
 startup_plotting; 
 
@@ -56,8 +54,7 @@ startup_plotting;
 % star =  load('F:\ARISE\C-130data\Met\SeaIceProfiles\ARISEairprocessed_wTemp_noRH_noCloud.mat');
 arisedir = 'F:\ARISE\C-130data\Met\SeaIceProfiles\';
 %filename = 'ARISEairprocessed_with_insitu_woRH';this was used for RT runs
-%filename = 'ARISEairprocessed_with_insitu_withWVparams20150318';
-filename = 'ARISEairprocessed_with_insitu_withWVparams20150921';
+filename = 'ARISEairprocessed_with_insitu_withWVparams20150318';
 star     =  load([arisedir filename '.mat']);
 
 % load MERRA
@@ -71,28 +68,6 @@ ColorSet = varycolor(14);% max num of profiles per flight
 nFields    = sum(~structfun(@isempty,star));
 starfieldNames  = fieldnames(star);
 k=0;
-
-% initialize fields for saving data for plotting
-
-        yearm       = [];
-        monthm      = [];
-        daym        = [];
-        profilem    = [];
-        iceconcm       = [];
-        lonm           =[];
-        latm           = [];
-        zm             = [];
-        Tm             = [];
-        Thetam         = [];
-        RHm            = [];
-        Qm             = [];
-        windSm         = [];% need to save within profile
-        windDm         = [];
-        staticPm       = [];
-        SatVPwaterm    = [];
-        SatVPicem      = [];
-        cldflagm       = [];
-        
 for i=1:nFields
     % Extract only the "profnum" fields
     names  = fieldnames(star.(starfieldNames{i,:}));
@@ -100,18 +75,15 @@ for i=1:nFields
     nProfiles = length(pnames);%max(star.(starfieldNames{i,:}).prof.nprof);
     % load ice-conc data
     daystr=starfieldNames{i,:};
-    %ice = readAMSR2data({daystr(4:11)});% this is with gradient calculated
-    ice = readAMSR2dataV2({daystr(4:11)});%
+    ice = readAMSR2data({daystr(4:11)});
     legendall ={};
     if nProfiles>0
-        
         dtice       = [];
         dtocean     = [];
         dmmrice     = [];
         dmmrocean   = [];
         tsurf_ice   = [];
         tsurf_ocean = [];
-        
         for j=1:nProfiles
             profstr    = strcat('profnum',num2str(j));
             %tmp        = starfieldNames{j,:};
@@ -124,9 +96,6 @@ for i=1:nFields
                               star.(starfieldNames{i,:}).(profstr).meanlon, 'nearest');
            
            % save reanalysis products into 4star profiles
-           
-           % add cloud fraction and omega when reading the FP product!!!
-           
            star.(starfieldNames{i,:}).(profstr).ana.alt      = reana.(reanadate).altLevels;
            star.(starfieldNames{i,:}).(profstr).ana.pst      = reana.(reanadate).plevels;
            star.(starfieldNames{i,:}).(profstr).ana.tmp      = reana.(reanadate).airT(:,latintrp,lonintrp);
@@ -137,16 +106,13 @@ for i=1:nFields
            star.(starfieldNames{i,:}).(profstr).ana.o3       = reana.(reanadate).O3molec(:,latintrp,lonintrp);
            star.(starfieldNames{i,:}).(profstr).ana.air      = reana.(reanadate).airmolec(:,latintrp,lonintrp);
            star.(starfieldNames{i,:}).(profstr).ana.theta700 = reana.(reanadate).st700T(latintrp,lonintrp);
-           star.(starfieldNames{i,:}).(profstr).ana.theta850 = reana.(reanadate).st850T(latintrp,lonintrp);
            star.(starfieldNames{i,:}).(profstr).ana.theta925 = reana.(reanadate).st925T(latintrp,lonintrp);
-           star.(starfieldNames{i,:}).(profstr).ana.eastwind = reana.(reanadate).eastwind;
-           star.(starfieldNames{i,:}).(profstr).ana.northwind= reana.(reanadate).northwind;
            
            
            %% generate atmospheric profiles for RT simulations
            %  only std and reanalysis
-            [star.(starfieldNames{i,:}).(profstr).ana.atmfile] = gen_atmos_rt(star.(starfieldNames{i,:}).(profstr)...
-                                                                             ,star.(starfieldNames{i,:}).(profstr).ana,0,daystr(4:11),profstr);
+%            [star.(starfieldNames{i,:}).(profstr).ana.atmfile] = gen_atmos_rt(star.(starfieldNames{i,:}).(profstr)...
+%                                                                             ,star.(starfieldNames{i,:}).(profstr).ana,0,daystr(4:11),profstr);
 %            %  std, reanalysis and c130
 %            [star.(starfieldNames{i,:}).(profstr).atmfile]     = gen_atmos_rt(star.(starfieldNames{i,:}).(profstr)...
 %                                                                             ,star.(starfieldNames{i,:}).(profstr).ana,1,daystr(4:11),profstr);
@@ -225,8 +191,7 @@ for i=1:nFields
            end
            
            if length(starx)>2
-               star.(starfieldNames{i,:}).(profstr).t700ind = interp1(starx,[1:length(starx)],2.500,'nearest'); % this is for ~2500 m at 700hPa 
-               star.(starfieldNames{i,:}).(profstr).t850ind = interp1(starx,[1:length(starx)],1.400,'nearest'); % this is for ~1400 m at 850hPa 
+               star.(starfieldNames{i,:}).(profstr).t700ind = interp1(starx,[1:length(starx)],2.500,'nearest'); % this is for ~2500 m at 700hPa  
                star.(starfieldNames{i,:}).(profstr).t925ind = interp1(starx,[1:length(starx)],0.700 ,'nearest');% this is for ~700  m at 925hPa    
                 % figure;plot(stary,starx,'-r');
                 % t [K]
@@ -293,7 +258,7 @@ for i=1:nFields
            xlabel('\DeltaT (MERRA-C130) [K]','FontSize',12);
            ylabel('Altitude [km]','fontSize',12);
            set(gca,'YTick',[1:10]);set(gca,'YTickLabel',{'1','2','3','4','5','6','7','8','9','10'});
-           axis([-10 10 0 3]);
+           axis([-10 10 0 7]);
            %legend('blue is over open ocean','cyan is over sea ice');
            set(gca,'Fontsize',12);
            
@@ -304,7 +269,7 @@ for i=1:nFields
            xlabel('\DeltaMMR (MERRA-C130) [g/kg]','FontSize',12);
            ylabel('Altitude [km]','fontSize',12);
            set(gca,'YTick',[1:10]);set(gca,'YTickLabel',{'1','2','3','4','5','6','7','8','9','10'});
-           axis([-5 5 0 3]);
+           axis([-10 10 0 7]);
            %legend('blue is over open ocean','cyan is over sea ice');
            set(gca,'Fontsize',12);
            
@@ -335,38 +300,8 @@ for i=1:nFields
 %            line2=[{'date ' daystr(4:11) ' profilenum ' num2str(j) ' DOY ' num2str(doy) ' UTtime ' time2}];
 %            dlmwrite(filen2,line2,'-append','delimiter','');
 %            clear line;
-
-
-        %% write profiles to .txt file for plotting
-
-        year = str2double(daystr(4:7));         yearm      = [yearm;   repmat(year,             length(star.(starfieldNames{i,:}).(profstr).z),1)];
-        month= str2double(daystr(8:9));         monthm     = [monthm;  repmat(month,            length(star.(starfieldNames{i,:}).(profstr).z),1)];
-        day  = str2double(daystr(10:11));       daym       = [daym;    repmat(day,              length(star.(starfieldNames{i,:}).(profstr).z),1)];
-        profilenumber = j;          profilem   = [profilem;repmat(profilenumber,    length(star.(starfieldNames{i,:}).(profstr).z),1)];
-        iceconc       = star.(starfieldNames{i,:}).(profstr).iceconc; 
-        iceconcm      = [iceconcm; repmat(iceconc, length(star.(starfieldNames{i,:}).(profstr).z),1)];
-        Tm            = [Tm;         (star.(starfieldNames{i,:}).(profstr).Static_AirT+273)];
-        lonm          = [lonm;        star.(starfieldNames{i,:}).(profstr).lon];
-        latm          = [latm;        star.(starfieldNames{i,:}).(profstr).lat];
-        zm            = [zm;          star.(starfieldNames{i,:}).(profstr).z/1000];
-        staticPm      = [staticPm;    star.(starfieldNames{i,:}).(profstr).staticP];
-        RHm           = [RHm;         star.(starfieldNames{i,:}).(profstr).RH];
-        Qm            = [Qm;          star.(starfieldNames{i,:}).(profstr).MMR];%C130 is g/Kg
-        SatVPwaterm   = [SatVPwaterm; star.(starfieldNames{i,:}).(profstr).SatVPwater];
-        SatVPicem     = [SatVPicem;   star.(starfieldNames{i,:}).(profstr).SatVPice];
-        windSm        = [windSm;      star.(starfieldNames{i,:}).(profstr).WindS];
-        windDm        = [windDm;      star.(starfieldNames{i,:}).(profstr).WindD];
-        cldflagm      = [cldflagm;    star.(starfieldNames{i,:}).(profstr).cld.cldflag];
-        
-        % add theta
-        theta=temp2theta((star.(starfieldNames{i,:}).(profstr).Static_AirT+273),...
-                                star.(starfieldNames{i,:}).(profstr).staticP);
-                            
-        Thetam = [Thetam; theta];
-
            
         end% num of profiles
-        
         %% save figure 10
         fi=[strcat('F:\ARISE\ArcticCRF\figures\', daystr(4:11),'tempCompare')];
         save_fig(10,fi,false);
@@ -402,7 +337,7 @@ for i=1:nFields
         save_fig(11,fi1,false);
         close(11);
         
-        %% continue and save figure 111
+         %% continue and save figure 111
         %-------------------------------%
             figure(111)
             hold on;
@@ -444,39 +379,21 @@ clear ice;
 
 end% number of days
 
- %% save data for plotting profiles
-        %  create dat array to save
-
-        dat2save = [yearm monthm daym profilem lonm latm zm staticPm iceconcm windSm windDm Tm Thetam RHm Qm SatVPwaterm SatVPicem cldflagm];
-        fi2sav   = ['C:\Users\msegalro.NDC\Documents\R\ArcticCRE\data\atmProfiles_4plottingv1_created_on_' datestr(now,'yyyy-mm-dd') '.txt'];
-        save(fi2sav, '-ASCII','dat2save');
-
 %% calculate LTS and LLSS per profile
-           % LTS     - lower tropospheric stability (theta700-theta_surface)
-           % LTS850  - lower tropospheric stability (theta850-theta_surface)
-           % LLSS    - lower level static stability (theta925-theta_surface)
+           % LTS  - lower tropospheric stability (theta700-theta_surface)
+           % LLSS - lower level static stability (theta925-theta_surface)
     LTSice_mean    = [];
     LTSice_std     = [];
-    LTS850ice_mean = [];
-    LTS850ice_std  = [];
     LLSSice_mean   = [];
-    LLSSice_std    = [];
     LTSocean_mean  = [];
     LTSocean_std   = [];
-    LTS850ocean_mean  = [];
-    LTS850ocean_std   = [];
     LLSSocean_mean = [];
     LLSSocean_std  = [];
     anaLTSice_mean    = [];
     anaLTSice_std     = [];
-    anaLTS850ice_mean    = [];
-    anaLTS850ice_std     = [];
     anaLLSSice_mean   = [];
-    anaLLSSice_std    = [];
     anaLTSocean_mean  = [];
     anaLTSocean_std   = [];
-    anaLTS850ocean_mean  = [];
-    anaLTS850ocean_std   = [];
     anaLLSSocean_mean = [];
     anaLLSSocean_std  = [];
     label_str = {};
@@ -486,35 +403,22 @@ for i=1:nFields
     
     if nProfiles>0
         LTSice = [];
-        LTS850ice = [];
         LLSSice= [];
         LTSocean = [];
-        LTS850ocean = [];
         LLSSocean= [];
         anaLTSice= [];
-        anaLTS850ice= [];
         anaLLSSice=[];
         anaLTSocean=[];
-        anaLTS850ocean=[];
         anaLLSSocean=[];
         for j=1:nProfiles
             profstr    = strcat('profnum',num2str(j));
             if star.(starfieldNames{i,:}).(profstr).iceconc > 0
-                
                 if ~isnan(star.(starfieldNames{i,:}).(profstr).t700ind)
                 star.(starfieldNames{i,:}).(profstr).LTS =...
                       star.(starfieldNames{i,:}).(profstr).theta(star.(starfieldNames{i,:}).(profstr).t700ind) - ...
                       star.(starfieldNames{i,:}).tsurf_ice_mean;% these numbers need to be calculated as nearest when staticP is available
                 LTSice = [LTSice ;star.(starfieldNames{i,:}).(profstr).LTS ];
                 end
-                
-                if ~isnan(star.(starfieldNames{i,:}).(profstr).t850ind)
-                star.(starfieldNames{i,:}).(profstr).LTS850 =...
-                      star.(starfieldNames{i,:}).(profstr).theta(star.(starfieldNames{i,:}).(profstr).t850ind) - ...
-                      star.(starfieldNames{i,:}).tsurf_ice_mean;% these numbers need to be calculated as nearest when staticP is available
-                LTS850ice = [LTS850ice ;star.(starfieldNames{i,:}).(profstr).LTS850 ];
-                end
-                
                 if ~isnan(star.(starfieldNames{i,:}).(profstr).t925ind)
                 star.(starfieldNames{i,:}).(profstr).LLSS=...
                       star.(starfieldNames{i,:}).(profstr).theta(star.(starfieldNames{i,:}).(profstr).t925ind) - ...
@@ -522,10 +426,8 @@ for i=1:nFields
                 
                 LLSSice= [LLSSice;star.(starfieldNames{i,:}).(profstr).LLSS];
                 end
-                
-                anaLTSice     = [anaLTSice;     star.(starfieldNames{i,:}).(profstr).ana.theta700];
-                anaLTS850ice  = [anaLTS850ice;  star.(starfieldNames{i,:}).(profstr).ana.theta850];
-                anaLLSSice    = [anaLLSSice;    star.(starfieldNames{i,:}).(profstr).ana.theta925];
+                anaLTSice  = [anaLTSice;  star.(starfieldNames{i,:}).(profstr).ana.theta700];
+                anaLLSSice = [anaLLSSice; star.(starfieldNames{i,:}).(profstr).ana.theta925];
                 % store reanalysis data
                 % ana_theta700
             else
@@ -535,14 +437,6 @@ for i=1:nFields
                       star.(starfieldNames{i,:}).tsurf_ocean_mean;% these numbers need to be calculated as nearest when staticP is available
                       LTSocean = [LTSocean ;star.(starfieldNames{i,:}).(profstr).LTS ];
                 end
-                
-                if ~isnan(star.(starfieldNames{i,:}).(profstr).t850ind)
-                star.(starfieldNames{i,:}).(profstr).LTS850 =...
-                      star.(starfieldNames{i,:}).(profstr).theta(star.(starfieldNames{i,:}).(profstr).t850ind) - ...
-                      star.(starfieldNames{i,:}).tsurf_ocean_mean;% these numbers need to be calculated as nearest when staticP is available
-                      LTS850ocean = [LTS850ocean ;star.(starfieldNames{i,:}).(profstr).LTS850 ];
-                end
-                
                 if ~isnan(star.(starfieldNames{i,:}).(profstr).t925ind)
                 star.(starfieldNames{i,:}).(profstr).LLSS=...
                       star.(starfieldNames{i,:}).(profstr).theta(star.(starfieldNames{i,:}).(profstr).t925ind) - ...
@@ -550,9 +444,8 @@ for i=1:nFields
                 
                 LLSSocean= [LLSSocean;star.(starfieldNames{i,:}).(profstr).LLSS];
                 end
-                anaLTSocean     = [anaLTSocean;     star.(starfieldNames{i,:}).(profstr).ana.theta700];
-                anaLTS850ocean  = [anaLTS850ocean;  star.(starfieldNames{i,:}).(profstr).ana.theta850];
-                anaLLSSocean    = [anaLLSSocean;    star.(starfieldNames{i,:}).(profstr).ana.theta925];
+                anaLTSocean  = [anaLTSocean;  star.(starfieldNames{i,:}).(profstr).ana.theta700];
+                anaLLSSocean = [anaLLSSocean; star.(starfieldNames{i,:}).(profstr).ana.theta925];
             end 
         
         
@@ -561,28 +454,20 @@ for i=1:nFields
          % calculate daily mean/std for C130
             LTSice_mean    = [LTSice_mean;nanmean(LTSice)];
             LTSice_std     = [LTSice_std;nanstd(LTSice)];
-            LTS850ice_mean = [LTS850ice_mean;nanmean(LTS850ice)];
-            LTS850ice_std  = [LTS850ice_std;nanstd(LTS850ice)];
             LLSSice_mean   = [LLSSice_mean;nanmean(LLSSice)];
             LLSSice_std    = [LLSSocean_std;nanstd(LLSSocean)];
             LTSocean_mean  = [LTSocean_mean;nanmean(LTSocean)];
             LTSocean_std   = [LTSocean_std;nanstd(LTSocean)];
-            LTS850ocean_mean  = [LTS850ocean_mean;nanmean(LTS850ocean)];
-            LTS850ocean_std   = [LTS850ocean_std;nanstd(LTS850ocean)];
             LLSSocean_mean = [LLSSocean_mean;nanmean(LLSSocean)];
             LLSSocean_std  = [LLSSocean_std;nanstd(LLSSocean)];
           
          % calculate daily mean/std for MERRA
             anaLTSice_mean    = [anaLTSice_mean;nanmean(anaLTSice)];
             anaLTSice_std     = [anaLTSice_std;nanstd(anaLTSice)];
-            anaLTS850ice_mean = [anaLTS850ice_mean;nanmean(anaLTS850ice)];
-            anaLTS850ice_std  = [anaLTS850ice_std;nanstd(anaLTS850ice)];
             anaLLSSice_mean   = [anaLLSSice_mean;nanmean(anaLLSSice)];
-            anaLLSSice_std    = [anaLLSSice_std;nanstd(anaLLSSice)];
+            anaLLSSice_std    = [anaLLSSocean_std;nanstd(anaLLSSocean)];
             anaLTSocean_mean  = [anaLTSocean_mean;nanmean(anaLTSocean)];
             anaLTSocean_std   = [anaLTSocean_std;nanstd(anaLTSocean)];
-            anaLTS850ocean_mean  = [anaLTS850ocean_mean;nanmean(anaLTS850ocean)];
-            anaLTS850ocean_std   = [anaLTS850ocean_std;nanstd(anaLTS850ocean)];
             anaLLSSocean_mean = [anaLLSSocean_mean;nanmean(anaLLSSocean)];
             anaLLSSocean_std  = [anaLLSSocean_std;nanstd(anaLLSSocean)];
           
@@ -599,8 +484,8 @@ end% days
     errorbar(1:length(label_str),LTSice_mean  ,LTSice_std,  'p','color'  ,[0.1 0.9 0.8],'markerfacecolor',[0.1 0.9 0.8],'markersize',10);  hold on;
     errorbar(1:length(label_str),LTSocean_mean,LTSocean_std,'p','color'  ,[0.1 0.1 0.8],'markerfacecolor',[0.1 0.1 0.8],'markersize',10);  hold on;
     % plot MERRA
-    errorbar(1:length(label_str),anaLTSice_mean  ,anaLTSice_std,  's','color'  ,[0.1 0.9 0.5],'markerfacecolor',[0.1 0.9 0.5],'markersize',6);  hold on;
-    errorbar(1:length(label_str),anaLTSocean_mean,anaLTSocean_std,'s','color'  ,[0.5 0.8 0.8],'markerfacecolor',[0.5 0.8 0.8],'markersize',6);  hold on;
+    errorbar(1:length(label_str),anaLTSice_mean  ,anaLTSice_std,  'p','color'  ,[0.1 0.9 0.5],'markerfacecolor',[0.1 0.9 0.5],'markersize',6);  hold on;
+    errorbar(1:length(label_str),anaLTSocean_mean,anaLTSocean_std,'p','color'  ,[0.1 0.8 0.1],'markerfacecolor',[0.1 0.8 0.1],'markersize',6);  hold on;
     set(gca,'XTickLabel',{' '})  % Erase xlabels 
     set(gca,'XTick',[1:length(label_str)]);  % Erase xlabels 
     set(gca,'XTickLabel',{label_str{:,1},label_str{:,2},label_str{:,3},label_str{:,4},label_str{:,5},...
@@ -616,54 +501,17 @@ end% days
     plot(1:length(label_str),s1,':','color'  ,[0.1 0.9 0.8],'linewidth',1.5);hold on;
     plot(1:length(label_str),s2,':','color'  ,[0.1 0.1 0.8],'linewidth',1.5);hold on;
     plot(1:length(label_str),s3,':','color'  ,[0.1 0.9 0.5],'linewidth',1.5);hold on;
-    plot(1:length(label_str),s4,':','color'  ,[0.5 0.8 0.8],'linewidth',1.5);hold on;
+    plot(1:length(label_str),s4,':','color'  ,[0.1 0.8 0.1],'linewidth',1.5);hold on;
     
     ylabel('\theta_{700} - LML [K]','fontsize',12);
     h11=text(8,65,'C130 over sea-ice')  ; set(h11,'fontsize',12,'color',[0.1 0.9 0.8]);
     h22=text(8,61,'C130over open ocean'); set(h22,'fontsize',12,'color',[0.1 0.1 0.8]);
     h33=text(8,57,'MERRA over sea-ice')  ;set(h33,'fontsize',12,'color',[0.1 0.9 0.5]);
-    h44=text(8,53,'MERRA open ocean');    set(h44,'fontsize',12,'color',[0.5 0.8 0.8]);
+    h44=text(8,53,'MERRA open ocean');    set(h44,'fontsize',12,'color',[0.1 0.8 0.1]);
     
-    fi2=[strcat('F:\ARISE\ArcticCRF\figures\',label_str{:,1},'_',label_str{:,end},'LTScompare20150922')];
+    fi2=[strcat('F:\ARISE\ArcticCRF\figures\',label_str{:,1},'_',label_str{:,end},'LTScompare')];
     save_fig(13,fi2,false);
     close(13);
-
-%% create and save figure 13
-    % plot comparison for each day
-    % LTS850
-    figure(131);
-    % plot C130
-    errorbar(1:length(label_str),LTS850ice_mean  ,LTS850ice_std,  'p','color'  ,[0.1 0.9 0.8],'markerfacecolor',[0.1 0.9 0.8],'markersize',10);  hold on;
-    errorbar(1:length(label_str),LTS850ocean_mean,LTS850ocean_std,'p','color'  ,[0.1 0.1 0.8],'markerfacecolor',[0.1 0.1 0.8],'markersize',10);  hold on;
-    % plot MERRA
-    errorbar(1:length(label_str),anaLTS850ice_mean  ,anaLTSice_std,  's','color'  ,[0.1 0.9 0.5],'markerfacecolor',[0.1 0.9 0.5],'markersize',6);  hold on;
-    errorbar(1:length(label_str),anaLTS850ocean_mean,anaLTSocean_std,'s','color'  ,[0.5 0.8 0.8],'markerfacecolor',[0.5 0.8 0.8],'markersize',6);  hold on;
-    set(gca,'XTickLabel',{' '})  % Erase xlabels 
-    set(gca,'XTick',[1:length(label_str)]);  % Erase xlabels 
-    set(gca,'XTickLabel',{label_str{:,1},label_str{:,2},label_str{:,3},label_str{:,4},label_str{:,5},...
-                           label_str{:,6},label_str{:,7},label_str{:,8},label_str{:,9},label_str{:,10},...
-                           label_str{:,11},label_str{:,12},label_str{:,13}});
-    axis([0 14 -10 70]);
-    th=rotateticklabel(gca,90);
-    % add trend lines
-    s1=spline(1:length(label_str),LTS850ice_mean,1:length(label_str));
-    s2=spline(1:length(label_str),LTS850ocean_mean,1:length(label_str));
-    s3=spline(1:length(label_str),anaLTS850ice_mean,1:length(label_str));
-    s4=spline(1:length(label_str),anaLTS850ocean_mean,1:length(label_str));
-    plot(1:length(label_str),s1,':','color'  ,[0.1 0.9 0.8],'linewidth',1.5);hold on;
-    plot(1:length(label_str),s2,':','color'  ,[0.1 0.1 0.8],'linewidth',1.5);hold on;
-    plot(1:length(label_str),s3,':','color'  ,[0.1 0.9 0.5],'linewidth',1.5);hold on;
-    plot(1:length(label_str),s4,':','color'  ,[0.5 0.8 0.8],'linewidth',1.5);hold on;
-    
-    ylabel('\theta_{850} - LML [K]','fontsize',12);
-    h11=text(8,65,'C130 over sea-ice')  ; set(h11,'fontsize',12,'color',[0.1 0.9 0.8]);
-    h22=text(8,61,'C130over open ocean'); set(h22,'fontsize',12,'color',[0.1 0.1 0.8]);
-    h33=text(8,57,'MERRA over sea-ice')  ;set(h33,'fontsize',12,'color',[0.1 0.9 0.5]);
-    h44=text(8,53,'MERRA open ocean');    set(h44,'fontsize',12,'color',[0.5 0.8 0.8]);
-    
-    fi3=[strcat('F:\ARISE\ArcticCRF\figures\',label_str{:,1},'_',label_str{:,end},'LTS850compare20150922')];
-    save_fig(131,fi3,false);
-    close(131);
     
 %% create and save figure 14
     % plot comparison for each day
@@ -673,8 +521,8 @@ end% days
     errorbar(1:length(label_str),LLSSice_mean  ,LLSSice_std,  'p','color'  ,[0.1 0.9 0.8],'markerfacecolor',[0.1 0.9 0.8],'markersize',10);  hold on;
     errorbar(1:length(label_str),LLSSocean_mean,LLSSocean_std,'p','color'  ,[0.1 0.1 0.8],'markerfacecolor',[0.1 0.1 0.8],'markersize',10);  hold on;
     % plot MERRA
-    errorbar(1:length(label_str),anaLLSSice_mean  ,anaLLSSice_std,  's','color'  ,[0.1 0.9 0.5],'markerfacecolor',[0.1 0.9 0.5],'markersize',6);  hold on;
-    errorbar(1:length(label_str),anaLLSSocean_mean,anaLLSSocean_std,'s','color'  ,[0.5 0.8 0.8],'markerfacecolor',[0.5 0.8 0.8],'markersize',6);  hold on;
+    errorbar(1:length(label_str),anaLLSSice_mean  ,anaLLSSice_std,  'p','color'  ,[0.1 0.9 0.5],'markerfacecolor',[0.1 0.9 0.5],'markersize',6);  hold on;
+    errorbar(1:length(label_str),anaLLSSocean_mean,anaLLSSocean_std,'p','color'  ,[0.1 0.8 0.1],'markerfacecolor',[0.1 0.8 0.1],'markersize',6);  hold on;
     set(gca,'XTickLabel',{' '})  % Erase xlabels 
     set(gca,'XTick',[1:length(label_str)]);  % Erase xlabels 
     set(gca,'XTickLabel',{label_str{:,1},label_str{:,2},label_str{:,3},label_str{:,4},label_str{:,5},...
@@ -690,19 +538,19 @@ end% days
     plot(1:length(label_str),s1,':','color'  ,[0.1 0.9 0.8],'linewidth',1.5);hold on;
     plot(1:length(label_str),s2,':','color'  ,[0.1 0.1 0.8],'linewidth',1.5);hold on;
     plot(1:length(label_str),s3,':','color'  ,[0.1 0.9 0.5],'linewidth',1.5);hold on;
-    plot(1:length(label_str),s4,':','color'  ,[0.5 0.8 0.8],'linewidth',1.5);hold on;
+    plot(1:length(label_str),s4,':','color'  ,[0.1 0.8 0.1],'linewidth',1.5);hold on;
     
     ylabel('\theta_{925} - LML [K]','fontsize',12);
     h11=text(8,65,'C130 over sea-ice')  ; set(h11,'fontsize',12,'color',[0.1 0.9 0.8]);
     h22=text(8,61,'C130over open ocean'); set(h22,'fontsize',12,'color',[0.1 0.1 0.8]);
     h33=text(8,57,'MERRA over sea-ice')  ;set(h33,'fontsize',12,'color',[0.1 0.9 0.5]);
-    h44=text(8,53,'MERRA open ocean');    set(h44,'fontsize',12,'color',[0.5 0.8 0.8]);
+    h44=text(8,53,'MERRA open ocean');    set(h44,'fontsize',12,'color',[0.1 0.8 0.1]);
     
-    fi2=[strcat('F:\ARISE\ArcticCRF\figures\',label_str{:,1},'_',label_str{:,end},'LLSScompare20150921')];
+    fi2=[strcat('F:\ARISE\ArcticCRF\figures\',label_str{:,1},'_',label_str{:,end},'LLSScompare')];
     save_fig(14,fi2,false);
     close(14);
 %% save processed star struct
-file2save=[strcat(arisedir,filename,'_w_anacompare_w_consolidatedclouds_wnewReff_wnewLowerProfiles_savedon_20150922.mat')];
+file2save=[strcat(arisedir,filename,'_w_anacompare_w_consolidatedclouds20150318.mat')];
 save(file2save,'-struct','star');
 %% function to convert temperature to potential temperature
 function theta=temp2theta(temp,pst)
@@ -716,6 +564,5 @@ function theta=temp2theta(temp,pst)
 % calculate
 const = 0.286;           %
 P0    =1000;             % hPa
-P0mat =repmat(P0,length(pst),1);
-theta = temp.*(P0mat./pst).^const;
+theta = temp.*(P0/pst).^const;
 return;

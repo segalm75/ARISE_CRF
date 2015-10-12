@@ -1,7 +1,8 @@
 %% Details of the function:
 %  NAME:
-% genCloudProf
-%----------------------------------
+% genCloudProfv1
+% this is the non-succesful version - don't use!
+%-----------------------------------------------
 % PURPOSE:
 %  - combines 4star/ssfr/in-situ data to generate cloud field for a
 %    selected vertical profile

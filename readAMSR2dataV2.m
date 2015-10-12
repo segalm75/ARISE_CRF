@@ -54,10 +54,11 @@ gridfile = strcat(adir,'LongitudeLatitudeGrid-n3125-NorthWestPassage.hdf');
 if movie
     mov(length(daystr)) = struct('cdata',[],'colormap',[]);
 end
-%for i=1:length(daystr)
+
+for i=1:length(daystr)
     
-    %datafile = strcat(adir,'asi-AMSR2-n3125-',daystr{:,i},'.hdf');
-    datafile = strcat(adir,'asi-AMSR2-n3125-',daystr,'.hdf');
+    datafile = strcat(adir,'asi-AMSR2-n3125-',daystr{:,i},'.hdf');
+    %datafile = strcat(adir,'asi-AMSR2-n3125-',daystr,'.hdf');
 
     d.iceconc = double(hdfread(datafile,'/ASI Ice Concentration')); 
     d.longrid = double(hdfread(gridfile,'/Longitudes')); 
@@ -106,27 +107,27 @@ end
     %% create gradient
     %[px,py] = gradient(d.iceconc,d.longrid,d.longrid);
     %[d.icegradx,d.icegrady] = gradient(d.iceconc);
-    I = d.iceconc; % original input
-    
-    % create gaussian filter
-    % fspecial(filter,size of kernel,sigma);
-    % G = imgaussfilt(I,0.8);
-    
-    % smooth with a gaussian kernel
-    kernel = 15;
-    sig    = 0.8;
-    G = fspecial('gaussian',kernel,sig);
-    
-    % smooth image by Gaussian convolution
-    I_smooth=conv2(I,G,'same'); 
-    
-    % perform gradient and create edge indicator
-    [dx,dy] = gradient(G); 
-     Ix = conv2(I,dx,'same');
-     Iy = conv2(I,dy,'same');
-    % gradient magnitude
-     d.Im = sqrt(Ix.*Ix + Iy.*Iy);
-     d.th = atan2(Iy,Ix); %
+%     I = d.iceconc; % original input
+%     
+%     % create gaussian filter
+%     % fspecial(filter,size of kernel,sigma);
+%     % G = imgaussfilt(I,0.8);
+%     
+%     % smooth with a gaussian kernel
+%     kernel = 15;
+%     sig    = 0.8;
+%     G = fspecial('gaussian',kernel,sig);
+%     
+%     % smooth image by Gaussian convolution
+%     I_smooth=conv2(I,G,'same'); 
+%     
+%     % perform gradient and create edge indicator
+%     [dx,dy] = gradient(G); 
+%      Ix = conv2(I,dx,'same');
+%      Iy = conv2(I,dy,'same');
+%     % gradient magnitude
+%      d.Im = sqrt(Ix.*Ix + Iy.*Iy);
+%      d.th = atan2(Iy,Ix); %
 
 
     % perform gradient and create edge indicator
@@ -162,7 +163,7 @@ end
 %     
     
     % create gradient line
-    d.Ith = d.th.*(d.Im>12);
+%     d.Ith = d.th.*(d.Im>12);
 %     figure(3);
 %     contour3((d.longrid),(d.latgrid),(d.Ith),'k');
 %     axis([-180 -100 70 85 0 100]);
@@ -190,11 +191,11 @@ end
         %contour(d.longrid,d.latgrid,d.iceconc), hold on, 
         %quiver(d.longrid,d.latgrid,px,py),      hold off
     end
-    out.(strcat('amsr',daystr)) = d;
+    out.(strcat('amsr',daystr{:,i})) = d;
     clear d;
-%end
+end
 %% save processed struct
-si = [adir,'AMSR2_wgrad_',daystr,'.mat'];
-disp(['saving to ' si]);
-save(si,'-struct','out');
+% si = [adir,'AMSR2_wgrad_',daystr,'.mat'];
+% disp(['saving to ' si]);
+% save(si,'-struct','out');
 return;

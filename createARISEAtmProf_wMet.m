@@ -46,6 +46,8 @@
 %                 added probe .ice file read
 %                 test
 %                 change version set to v1.1 due to probe data addition
+% MS: 2015-09-18, added entire CDP range to be saved
+% MS: 2015-09-21, added WindS, WindD, and staticP fields to be saved
 % -------------------------------------------------------------------------
 %% function routine
 function out = createARISEAtmProf_wMet
@@ -85,7 +87,8 @@ airinfile = getfullname__('arise-C130-Hskping_c130_*.ict','F:','Select a met ict
 % read all data
     for i=1:length(air_files)
         dm{i} = strsplit(air_files(i).name,'_');
-        dates(i) = dm{:,i}(2);
+       %dates(i) = dm{:,i}(2);
+        dates(i) = dm{:,i}(3);
         dates_str = strcat('met',dates{:,i},'_');
         tmp =ictread([airdir air_files(i).name]);        % air data    
         air.(dates_str).UTCsec        = tmp.Start_UTC;
@@ -145,6 +148,10 @@ airinfile = getfullname__('arise-C130-Hskping_c130_*.ict','F:','Select a met ict
         is_params = [5:9 14 18 23 30 35 40 45];%{'TWC_gm3','LWC1_gm3','LWC2_gm3','PWV_cm','LWP_mm','nCDP_cm3','CDP03_dNdlogD','CDP08_dNdlogD','CDP15_dNdlogD','CDP20_dNdlogD','CDP25_dNdlogD','CDP30_dNdlogD'};
         is_labels = {'TWC_gm3','LWC1_gm3','LWC2_gm3','PWV_cm','LWP_mm','nCDP_cm3','CDP05um',...
                      'CDP10um','CDP20um','CDP30um','CDP40um','CDP50um'};
+        is_params = [5:9 14 16:45];%{'TWC_gm3','LWC1_gm3','LWC2_gm3','PWV_cm','LWP_mm','nCDP_cm3','CDP03_dNdlogD','CDP08_dNdlogD','CDP15_dNdlogD','CDP20_dNdlogD','CDP25_dNdlogD','CDP30_dNdlogD'};
+        is_labels = {'TWC_gm3','LWC1_gm3','LWC2_gm3','PWV_cm','LWP_mm','nCDP_cm3','CDP03um','CDP04um','CDP05um','CDP06um','CDP07um','CDP08um','CDP09um','CDP10um',...
+                     'CDP11um', 'CDP12um', 'CDP13um', 'CDP14um', 'CDP16um', 'CDP18um', 'CDP20um', 'CDP22um', 'CDP24um','CDP26um','CDP28um',...
+                     'CDP30um','CDP32um','CDP34um','CDP36um','CDP38um','CDP40um','CDP42um','CDP44um','CDP46um','CDP48um','CDP50um'};
         %CDP03_dNdlogD% cm-3; 5um
         %CDP08_dNdlogD% cm-3; 10um
         %CDP15_dNdlogD% cm-3; 20 um
@@ -240,6 +247,12 @@ for i=1:length(air_files)
                 air.(dates_str).(prof_str).SatVPice =...
                      air.(dates_str).SatVPice(air.(dates_str).UTChr<=ut2 &...
                                                                      air.(dates_str).UTChr>=ut1);
+                air.(dates_str).(prof_str).WindS =...
+                     air.(dates_str).WindS(air.(dates_str).UTChr<=ut2 &...
+                                                                     air.(dates_str).UTChr>=ut1);
+                air.(dates_str).(prof_str).WindD =...
+                     air.(dates_str).WindD(air.(dates_str).UTChr<=ut2 &...
+                                                                     air.(dates_str).UTChr>=ut1);
                 air.(dates_str).(prof_str).starStr =...
                      air.(dates_str).starStr(air.(dates_str).UTChr<=ut2 &...
                                                                      air.(dates_str).UTChr>=ut1);
@@ -334,7 +347,7 @@ for i=1:length(air_files)
                     set(gca,'fontsize',12);
                     title(dates{:,i});
                     legend('mean','std');
-                    axis([-20 30 0 7]);
+                    axis([-20 5 0 3]);
                     date = datenum(str2double(dates{:,i}(1:4)), str2double(dates{:,i}(5:6)), str2double(dates{:,i}(7:8)));   % Convert date into serial numbers
                     str = datestr(date, 'dd mmm yyyy'); % Show in the format
                     drawnow
@@ -352,7 +365,7 @@ for i=1:length(air_files)
                     set(gca,'fontsize',12);
                     title(dates{:,i});
                     legend('mean','std');
-                    axis([0 100 0 7]);
+                    axis([80 100 0 3]);
                     date = datenum(str2double(dates{:,i}(1:4)), str2double(dates{:,i}(5:6)), str2double(dates{:,i}(7:8)));   % Convert date into serial numbers
                     str = datestr(date, 'dd mmm yyyy'); % Show in the format
                     drawnow
@@ -371,7 +384,8 @@ winopen('ARISEmeanRHprof.avi');
 
 %% save processed air struct for all flights
 disp(strcat('saving',airdir,'ARISEairprocessed_with_insitu_withWVparams.mat'));
-save([airdir,'ARISEairprocessed_with_insitu_withWVparams.mat'],'-struct','air');
+%airdir='F:\ARISE\C-130data\Met\SeaIceProfiles\';
+save([airdir,'ARISEairprocessed_with_insitu_withWVparams20150921.mat'],'-struct','air');
 return;
 
 

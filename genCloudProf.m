@@ -42,11 +42,14 @@
 % MS, 2015-03-14, edited cloud consolidating algorithm from v1
 % MS, 2015-03-15, changed nCDPt from 0.1 to 0.5 and corrected some bugs
 %                 related to not capturing clouds below after consolidation
+% MS, 2015-09-18, changed Reff calculation, adding more size bins
+% MS, 2015-09-21, added cloud property file save for plotting purposes
+% MS, 2015-09-29, added TWC and IWC fields
 % ---------------------------------------------------------------------------
 %% function routine
 function [c] = genCloudProf(prof,dprof,allprof,daystr,doy)
 
-version_set('1.0');
+version_set('1.1');
 startup_plotting;
 
 %% cloud flag
@@ -124,6 +127,7 @@ if c.cldnum==0
     c.cldphase = [];
     c.cldreff  = [];
     c.cldwc    = [];
+    c.cldic    = [];
     c.cldflag  = zeros(length(prof.time),1);
 end
 
@@ -156,10 +160,15 @@ for i=1:c.cldnum
         c.cldflag(c.cldstart(i):c.cldend(i)) = 1;
 end
 %% cloud Reff
-reff = {'05','10','20','30','40','50'}; % in um
-reffum = [5 10 20 30 40 50];
-c.cldreff = zeros(c.cldnum,1);
-partsum   = zeros(c.cldnum,length(reff));
+reff = {'03','03','05','06','07','08','09','10','11','12','13','14','16','18','20',...
+        '22','24','26','28','30','32','34','36','38','40','42','44','46','48','50'}; % in um
+reffum     = [3 4 5 6 7 8 9 10 11 12 13 14 16 18 20 22 24 26 28 30 32 34 36 38 40 42 44 46 48 50];
+reffum_bin = [0 3 4 5 6 7 8 9 10 11 12 13 14 16 18 20 22 24 26 28 30 32 34 36 38 40 42 44 46 48 50];
+%     reff = {'05','10','20','30','40','50'}; % in um
+%     reffum = [5 10 20 30 40 50];
+
+c.cldreff_v1 = zeros(c.cldnum,1);
+partsum      = zeros(c.cldnum,length(reff));
 
 % sum and avg normalized particle number per cloud
 for i=1:c.cldnum
@@ -167,9 +176,26 @@ for i=1:c.cldnum
         pstr = strcat('CDP',reff{:,j},'um');
         partsum(i,j) = sum(prof.(pstr)(c.cldstart(i):c.cldend(i)));
     end
-    c.cldreff(i) = round(sum((partsum(i,:).*reffum))/sum(partsum(i,:)));
+    c.cldreff_v1(i) = round(sum((partsum(i,:).*reffum))/sum(partsum(i,:)));
 end
-clear partsum;
+
+% calculate Reff by: sum(pi x r^3*n(r)dr)/sum(pi x r_2*n(r)dr)
+numerator   = zeros(c.cldnum,length(reff));
+denomenator = zeros(c.cldnum,length(reff));
+c.cldreff   = zeros(c.cldnum,1);
+
+for i=1:c.cldnum
+    for j=1:length(reff)
+        pstr = strcat('CDP',reff{:,j},'um');
+        numerator(i,j)   = pi*(reffum_bin(j+1) - reffum_bin(j))*(reffum(j))^3*sum(prof.(pstr)(c.cldstart(i):c.cldend(i)));
+        denomenator(i,j) = pi*(reffum_bin(j+1) - reffum_bin(j))*(reffum(j))^2*sum(prof.(pstr)(c.cldstart(i):c.cldend(i)));
+    end
+    c.cldreff(i) = round(sum((numerator(i,:)))/sum(denomenator(i,:)));
+end
+
+
+clear partsum numerator denomenator
+
 %% cloud phase
 % !!! this is only by Reff/temp; next stage to add 4star data/RH over ice
 c.cldphase = zeros(c.cldnum,1);
@@ -190,14 +216,36 @@ end
 % the density of liquid water as 1 g/cm3 = (1 g/cm3)(0.1 cm/mm) = 0.1 g/(cm2-mm)
 cnvrt = 0.1;
 c.cldwc = zeros(c.cldnum,1);
+c.cldic = zeros(c.cldnum,1);
+% GVR results are not reliable
+% for i=1:c.cldnum
+%     if strcmp(prof.direction,'descend')
+%         wp = nanmean(prof.LWP_mm(c.cldend(i)-5:c.cldend(i)));    % in mm (from GVR)
+%     else
+%         wp = nanmean(prof.LWP_mm(c.cldstart(i):c.cldstart(i)+5));% in mm (from GVR)
+%     end
+%     if wp==0 wp=0.04; end;
+%     c.cldwc(i)= (wp*cnvrt*100^2)/c.cldthick(i);                  % this is water path [g/m3]
+% end
+
 for i=1:c.cldnum
     if strcmp(prof.direction,'descend')
-        wp = nanmean(prof.LWP_mm(c.cldend(i)-5:c.cldend(i)));    % in mm (from GVR)
+       %wc = nanmean(prof.LWC1_gm3(c.cldend(i)-5:c.cldend(i)));     % in g/m3 (from WCM-2000)
+        wc = nanmean(prof.LWC1_gm3(c.cldend(i):c.cldstart(i)));     % in g/m3 (from WCM-2000)
+        ic = nanmean(prof.TWC_gm3(c.cldend(i):c.cldstart(i)) - ...
+                     abs(prof.LWC1_gm3(c.cldend(i):c.cldstart(i))));% in g/m3 (from WCM-2000)
+        tc = nanmean(prof.TWC_gm3(c.cldend(i):c.cldstart(i)));
     else
-        wp = nanmean(prof.LWP_mm(c.cldstart(i):c.cldstart(i)+5));% in mm (from GVR)
+       %wc = nanmean(prof.LWC1_gm3(c.cldstart(i):c.cldstart(i)+5)); % in g/m3 (from WCM-2000)
+        wc = nanmean(prof.LWC1_gm3(c.cldstart(i):c.cldend(i)));     % in g/m3 (from WCM-2000)
+        ic = nanmean(prof.TWC_gm3(c.cldstart(i):c.cldend(i)) - ...
+                     abs(prof.LWC1_gm3(c.cldstart(i):c.cldend(i))));% in g/m3 (from WCM-2000)
+        tc = nanmean(prof.TWC_gm3(c.cldstart(i):c.cldend(i)));
     end
-    if wp==0 wp=0.04; end;
-    c.cldwc(i)= (wp*cnvrt*100^2)/c.cldthick(i);                  % this is water path [g/m3]
+    if wc<=0 wc=NaN; end;
+    if tc<=0 ic=NaN; end;
+    c.cldwc(i)= wc;                                                % this is water content [g/m3]
+    c.cldic(i)= ic;                                                % this is ice   content [g/m3]
 end
 
 end% if cloud
@@ -280,17 +328,44 @@ if c.cldbelow==1
     end
     
     % reff
-    reff = {'05','10','20','30','40','50'}; % in um
-    reffum = [5 10 20 30 40 50];
+    reff = {'03','03','05','06','07','08','09','10','11','12','13','14','16','18','20',...
+        '22','24','26','28','30','32','34','36','38','40','42','44','46','48','50'}; % in um
+    reffum     = [3 4 5 6 7 8 9 10 11 12 13 14 16 18 20 22 24 26 28 30 32 34 36 38 40 42 44 46 48 50];
+    reffum_bin = [0 3 4 5 6 7 8 9 10 11 12 13 14 16 18 20 22 24 26 28 30 32 34 36 38 40 42 44 46 48 50];
+%     reff = {'05','10','20','30','40','50'}; % in um
+%     reffum = [5 10 20 30 40 50];
+
+    c.cldreff_v1 = zeros(c.cldnum,1);
+    partsum   = zeros(c.cldnum,length(reff));
      for j=1:length(reff)
         pstr = strcat('CDP',reff{:,j},'um');
         partsum(j) = sum(prof.(pstr)(c.cldstart(end):c.cldend(end)));
      end
      if sum(partsum)>0
-        c.cldreff = [c.cldreff ;round(sum((partsum.*reffum))/sum(partsum))];
+        c.cldreff_v1 = [c.cldreff_v1 ;round(sum((partsum.*reffum))/sum(partsum))];
      else
-        c.cldreff = [c.cldreff ;10];% default value
+        c.cldreff_v1 = [c.cldreff_v1 ;10];% default value
      end
+     
+    % calculate Reff by: sum(pi x r^3*n(r)dr)/sum(pi x r_2*n(r)dr)
+    numerator   = zeros(c.cldnum,length(reff));
+    denomenator = zeros(c.cldnum,length(reff));
+    c.cldreff   = zeros(c.cldnum,1);
+
+    for i=1:c.cldnum
+        for j=1:length(reff)
+            pstr = strcat('CDP',reff{:,j},'um');
+            numerator(i,j)   = pi*(reffum_bin(j+1) - reffum_bin(j))*(reffum(j))^3*sum(prof.(pstr)(c.cldstart(i):c.cldend(i)));
+            denomenator(i,j) = pi*(reffum_bin(j+1) - reffum_bin(j))*(reffum(j))^2*sum(prof.(pstr)(c.cldstart(i):c.cldend(i)));
+        end
+        
+         if sum(partsum)>0
+            c.cldreff = [c.cldreff ;round(sum((numerator(i,:)))/sum(denomenator(i,:)));];
+         else
+            c.cldreff = [c.cldreff ;10];% default value
+         end
+    end
+     
      
      % phase
      if c.cldreff(end) <= 30 && nanmean(prof.Static_AirT(c.cldstart(end):c.cldend(end)))> -20
@@ -306,12 +381,25 @@ if c.cldbelow==1
      
      % wc
       if strcmp(prof.direction,'descend')
-        wp = nanmean(prof.LWP_mm(c.cldend(end)-5:c.cldend(end)));    % in mm (from GVR)
+        % wc = nanmean(prof.LWC1_gm3(c.cldend(end)-5:c.cldend(end)));    % in g/m3 (from WCM-2000)
+        wc = nanmean(prof.LWC1_gm3(c.cldend(i):c.cldstart(i)));          % in g/m3 (from WCM-2000)
+        ic = nanmean(prof.TWC_gm3(c.cldend(i):c.cldstart(i)) - ...
+                     prof.LWC1_gm3(c.cldend(i):c.cldstart(i)));          % in g/m3 (from WCM-2000)
+        tc = nanmean(prof.TWC_gm3(c.cldend(i):c.cldstart(i)));
+                 
       else
-        wp = nanmean(prof.LWP_mm(c.cldstart(end):c.cldstart(end)+5));% in mm (from GVR)
+        % wc = nanmean(prof.LWC1_gm3(c.cldstart(end):c.cldstart(end)+5));% in g.m3 (from WCM-2000)
+        wc = nanmean(prof.LWC1_gm3(c.cldstart(i):c.cldend(i)));          % in g/m3 (from WCM-2000)
+        ic = nanmean(prof.TWC_gm3(c.cldstart(i):c.cldend(i)) - ...
+                     prof.LWC1_gm3(c.cldstart(i):c.cldend(i)));          % in g/m3 (from WCM-2000)
+        tc = nanmean(prof.TWC_gm3(c.cldstart(i):c.cldend(i)));
+                 
       end
-      if wp==0 wp=0.04; end;
-      c.cldwc = [c.cldwc ;(wp*0.1*100^2)/c.cldthick(end)];
+      if wc<=0 wc=NaN; end;
+      if tc<=0 ic=NaN; end;
+      
+      c.cldwc = [c.cldwc ;wc];
+      c.cldic = [c.cldic ;ic];
       
       % cloudflag
       if strcmp(prof.direction,'descend')
@@ -479,13 +567,50 @@ end
               c.cldflag(c.cldstart(i):c.cldend(i)) = 1;  
            end
            
-          
-           %% save cloud params to file
+           
+           %% write data to file
+           %----------------------
+           % this is for R plotting
+           filen=['C:\Users\msegalro.NDC\Documents\R\ArcticCRE\data\cloudFields20151002v1.txt'];
+           disp( ['Writing to file: ' filen]);
+           prof.iceconc = prof.iceconc_mean;
+           
+           for i=1:c.cldnum
+                   
+%                    line=[{'date ' daystr ' profilenum ' num2str(dprof) ' DOY ' doy ' sza ' num2str(sza) ' lat ' num2str(lat) ' lon ' num2str(lon) ...
+%                           ' ice_conc ' num2str(round(prof.iceconc)) ' platform_low_alt ' num2str(c.c130sur_alt) ...
+%                           ' numclouds ' num2str(c.cldnum) ' cloudabove ' num2str(c.cldabove) ' cloudbelow ' num2str(c.cldbelow) ' cloudtop ' num2str(cldtop(i)/1000)...
+%                           ' cloudbot '  num2str(cldbot(i)/1000) ' cloudthick ' num2str(cldthick(i)/1000) ' cloudreff ' num2str(cldreff(i))  ' cloudphase ' num2str(cldphase(i))...
+%                           ' cloudwc '   num2str(cldwc(i)) '  '}];
+
+                    line=[{daystr ' ' num2str(dprof) ' ' doy ' ' num2str(sza) ' ' num2str(lat) ' ' num2str(lon) ' ' num2str(round(prof.iceconc)) ' ' num2str(c.c130sur_alt) ...
+                          ' ' num2str(c.cldnum) ' ' num2str(c.cldabove) ' ' num2str(c.cldbelow) ' ' num2str(cldtop(i)/1000) ' ' num2str(cldbot(i)/1000) ' ' num2str(cldthick(i)/1000) ...
+                          ' ' num2str(cldreff(i))  ' ' num2str(cldphase(i)) ' ' num2str(cldwc(i)) ' ' num2str(c.cldic(i))}];
+
+               dlmwrite(filen,line,'-append','delimiter','');
+
+               clear line;
+           end
+           
+           %% write cloud params to file for RT
+           %-----------------------------------
            % write data to file
-           filen=['C:\cygwin\home\msegalro\libradtran\input\CRF\arise\MERRABASE\MERRABASEdatin_consolidateclouds_w_wvpapram_20150508.txt'];
+           % this is for RT simulation input
+           
+           for cc=1:length(c.cldwc)
+               if isnan(c.cldwc(cc)) 
+                    c.cldwc(cc)   = 0.001;
+               else
+                    c.cldwc(cc)   = c.cldwc(cc);
+               end
+           end
+           
+           %filen=['C:\cygwin\home\msegalro\libradtran\input\CRF\arise\MERRABASE\MERRABASEdatin_consolidateclouds_w_wvpapram_20150508_savedon20150921.txt'];
+           filen=['C:\cygwin\home\msegalro\libradtran\input\CRF\arise\MERRABASE\MERRABASEdatin_consolidateclouds_w_wvpapram_20151002_newReffv1.txt'];
            disp( ['Writing to file: ' filen]);
            [filepath filename ext] = fileparts(prof.ana.atmfile);
            atmosfile = strcat(filename, ext);
+           
            %for i=1:c.cldnum
                if prof.iceconc >15
                    s_albedo_file = 'albedo_ice.dat';%strcat('F:\ARISE\ArcticCRF\METdata\albedo\albedo_ice.dat');
@@ -494,7 +619,7 @@ end
                           ' single albedo file ' s_albedo_file ' ice_conc ' num2str(round(prof.iceconc)) ' weighted albedo file ' w_albedo_file ' atmos file ' atmosfile...
                           ' platform_low_alt ' num2str(c.c130sur_alt) ' numclouds ' num2str(c.cldnum) ' cloudabove ' num2str(c.cldabove) ' cloudbelow ' num2str(c.cldbelow) ' cloudtop ' num2str(cldtop'/1000)...
                           ' cloudbot '  num2str(cldbot'/1000) ' cloudthick ' num2str(cldthick'/1000) ' cloudreff ' num2str(cldreff')  ' cloudphase ' num2str(cldphase')...
-                          ' cloudwc '   num2str(cldwc') '  '}];
+                          ' cloudwc '   num2str(c.cldwc') '  '}];
                else
                    s_albedo_file = 'albedo_water.dat';
                    w_albedo_file = strcat('albedo_ice_' ,num2str(round(prof.iceconc)),'.dat');
@@ -502,7 +627,7 @@ end
                           ' single albedo file ' s_albedo_file ' ice_conc ' num2str(round(prof.iceconc)) ' weighted albedo file ' w_albedo_file ' atmos file ' atmosfile...
                           ' platform_low_alt ' num2str(c.c130sur_alt) ' numclouds ' num2str(c.cldnum) ' cloudabove ' num2str(c.cldabove) ' cloudbelow ' num2str(c.cldbelow) ' cloudtop ' num2str(cldtop'/1000)...
                           ' cloudbot '  num2str(cldbot'/1000) ' cloudthick ' num2str(cldthick'/1000) ' cloudreff ' num2str(cldreff') ' cloudphase ' num2str(cldphase')...
-                          ' cloudwc '   num2str(cldwc') '  '}];
+                          ' cloudwc '   num2str(c.cldwc') '  '}];
                end
                
                dlmwrite(filen,line,'-append','delimiter','');
