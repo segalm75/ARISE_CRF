@@ -1,6 +1,6 @@
 %% Details of the function:
 %  NAME:
-% star_ana_compare
+% star_ana_compare_save
 %----------------------------------
 % PURPOSE:
 %  - create atmospheric profiles from ARISE flights-vertical legs

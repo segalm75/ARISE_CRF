@@ -41,6 +41,7 @@
 % MODIFICATION HISTORY:
 % Written: Michal Segal-Rozenhaimer (MS), NASA Ames,Sep-25-2015
 % modified from star_ana_compare to use only relevant profiles
+% when reading model files
 % -------------------------------------------------------------------------
 %% function routine
 function air_model_combine
@@ -448,8 +449,13 @@ for i=1:nFields
             
            %% generate atmospheric profiles for RT simulations
            %  this is for model/reanalysis (using std atmosphere and model)
+           %  mode=0 is for MERRA, 0.1 is for GEOS-FP
             [air.(starfieldNames{i,:}).(profstr).ana.atmfile] = gen_atmos_prof4rt(air.(starfieldNames{i,:}).(profstr)...
-                                                                             ,air.(starfieldNames{i,:}).(profstr).ana,0,daystr(4:11),profstr);
+                                                                             ,air.(starfieldNames{i,:}).(profstr).ana,0.1,daystr(4:11),profstr);
+           %  this is for aircraft (using std atm, model for above aircrat, and aircraft)
+           %  this uses interpolated aircrft fields
+%            [air.(starfieldNames{i,:}).(profstr).airAtmNative]= gen_atmos_prof4rt(air.(starfieldNames{i,:}).(profstr)...
+%                                                                             ,air.(starfieldNames{i,:}).(profstr).ana,1,daystr(4:11),profstr);
           
            %% compare temp
            figure(10);
@@ -473,7 +479,7 @@ for i=1:nFields
            dprof = j;
            k = k+1;
            allprof = k;
-           [air.(starfieldNames{i,:}).(profstr).cld] = genCloudProf(air.(starfieldNames{i,:}).(profstr),dprof,allprof,daystr(4:11),num2str(doy));        
+           [air.(starfieldNames{i,:}).(profstr).cld] = genAirCloudProf(air.(starfieldNames{i,:}).(profstr),dprof,allprof,daystr(4:11),num2str(doy));        
            %---------------------------------------------------------------------------------------------------------------------------------------%
            
            %% compare temp with cloud flags
@@ -627,13 +633,13 @@ for i=1:nFields
            % interp airT/airMMR/airRH to reana levels, including LML
            if sum(~isNaN(air.(starfieldNames{i,:}).(profstr).airTinterp))>2
                 air.(starfieldNames{i,:}).(profstr).airTinterp(1) = ...
-                       interp1(air.(starfieldNames{i,:}).(profstr).ana.zalt_mean(1:3),air.(starfieldNames{i,:}).(profstr).airTinterp(1:3),...
+                       interp1(air.(starfieldNames{i,:}).(profstr).ana.zalt_mean(2:4),air.(starfieldNames{i,:}).(profstr).airTinterp(2:4),...
                        air.(starfieldNames{i,:}).(profstr).ana.zalt_mean(1),'linear','extrap');
                        air.(starfieldNames{i,:}).(profstr).airTinterp(p+1:end) = NaN;
                        
                        
                 air.(starfieldNames{i,:}).(profstr).airThetainterp(1) = ...
-                       interp1(air.(starfieldNames{i,:}).(profstr).ana.zalt_mean(1:3),air.(starfieldNames{i,:}).(profstr).airThetainterp(1:3),...
+                       interp1(air.(starfieldNames{i,:}).(profstr).ana.zalt_mean(2:4),air.(starfieldNames{i,:}).(profstr).airThetainterp(2:4),...
                        air.(starfieldNames{i,:}).(profstr).ana.zalt_mean(1),'linear','extrap');
                        air.(starfieldNames{i,:}).(profstr).airThetainterp(p+1:end) = NaN;
                        
@@ -668,7 +674,7 @@ for i=1:nFields
            % MMR
            if sum(~isNaN(air.(starfieldNames{i,:}).(profstr).airMMRinterp))>2
                air.(starfieldNames{i,:}).(profstr).airMMRinterp(1) = ...
-                   interp1(air.(starfieldNames{i,:}).(profstr).ana.zalt_mean(1:3),air.(starfieldNames{i,:}).(profstr).airMMRinterp(1:3),...
+                   interp1(air.(starfieldNames{i,:}).(profstr).ana.zalt_mean(2:4),air.(starfieldNames{i,:}).(profstr).airMMRinterp(2:4),...
                            air.(starfieldNames{i,:}).(profstr).ana.zalt_mean(1),'linear','extrap');
                air.(starfieldNames{i,:}).(profstr).airMMRinterp(p+1:end) = NaN;
                
@@ -683,7 +689,7 @@ for i=1:nFields
            % RH
            if sum(~isNaN(air.(starfieldNames{i,:}).(profstr).airRHinterp))>2
                air.(starfieldNames{i,:}).(profstr).airRHinterp(1) = ...
-                   interp1(air.(starfieldNames{i,:}).(profstr).ana.zalt_mean(1:3),air.(starfieldNames{i,:}).(profstr).airRHinterp(1:3),...
+                   interp1(air.(starfieldNames{i,:}).(profstr).ana.zalt_mean(2:4),air.(starfieldNames{i,:}).(profstr).airRHinterp(2:4),...
                            air.(starfieldNames{i,:}).(profstr).ana.zalt_mean(1),'linear','extrap');
                air.(starfieldNames{i,:}).(profstr).airRHinterp(19:end) = NaN;
                
@@ -783,11 +789,10 @@ for i=1:nFields
             
            %% generate atmospheric profiles for RT simulations
            %  this is for aircraft (using std atm, model for above aircrat, and aircraft)
-         
-           [star.(starfieldNames{i,:}).(profstr).atmfile]     = gen_atmos_rt(star.(starfieldNames{i,:}).(profstr)...
-                                                                            ,star.(starfieldNames{i,:}).(profstr).ana,1,daystr(4:11),profstr);
-            
-            
+           %  this uses interpolated aircrft fields
+           [air.(starfieldNames{i,:}).(profstr).airAtmInterp]     = gen_atmos_prof4rt(air.(starfieldNames{i,:}).(profstr)...
+                                                                            ,air.(starfieldNames{i,:}).(profstr).ana,2,daystr(4:11),profstr);
+          
            %% plot Temp differences
            figure(100);
            plot((dt),(air.(starfieldNames{i,:}).(profstr).ana.zalt_mean/1000),'-o','color',an,...
@@ -1000,7 +1005,182 @@ end         % end number of days
         save(fi2sav, '-ASCII','dat2save');
         
         
+%% add plots and save entire struct for further processing
+
+%% calculate LTS and LLSS per profile
+           % LTS  - lower tropospheric stability (theta700-theta_surface)
+           % LLSS - lower level static stability (theta925-theta_surface)
+    LTSice_mean    = [];
+    LTSice_std     = [];
+    LLSSice_mean   = [];
+    LTSocean_mean  = [];
+    LTSocean_std   = [];
+    LLSSocean_mean = [];
+    LLSSocean_std  = [];
+    anaLTSice_mean    = [];
+    anaLTSice_std     = [];
+    anaLLSSice_mean   = [];
+    anaLTSocean_mean  = [];
+    anaLTSocean_std   = [];
+    anaLLSSocean_mean = [];
+    anaLLSSocean_std  = [];
+    label_str = {};
+for i=1:nFields
+    nProfiles = max(air.(starfieldNames{i,:}).prof.nprof);
+    daystr=starfieldNames{i,:};
+    
+    if nProfiles>0
+        LTSice = [];
+        LLSSice= [];
+        LTSocean = [];
+        LLSSocean= [];
+        anaLTSice= [];
+        anaLLSSice=[];
+        anaLTSocean=[];
+        anaLLSSocean=[];
+        for j=1:nProfiles
+            profstr    = strcat('profnum',num2str(j));
+            if air.(starfieldNames{i,:}).(profstr).iceconc_mean > 15
+                if ~isnan(air.(starfieldNames{i,:}).(profstr).t850ind)
+                air.(starfieldNames{i,:}).(profstr).LTS =...
+                      air.(starfieldNames{i,:}).(profstr).theta(air.(starfieldNames{i,:}).(profstr).t850ind) - ...
+                      air.(starfieldNames{i,:}).tsurf_ice_mean;% these numbers need to be calculated as nearest when staticP is available
+                LTSice = [LTSice ;air.(starfieldNames{i,:}).(profstr).LTS ];
+                end
+                if ~isnan(air.(starfieldNames{i,:}).(profstr).t925ind)
+                air.(starfieldNames{i,:}).(profstr).LLSS=...
+                      air.(starfieldNames{i,:}).(profstr).theta(air.(starfieldNames{i,:}).(profstr).t925ind) - ...
+                      air.(starfieldNames{i,:}).tsurf_ice_mean;% these numbers need to be calculated as nearest when staticP is available
+                
+                LLSSice= [LLSSice;air.(starfieldNames{i,:}).(profstr).LLSS];
+                end
+                anaLTSice  = [anaLTSice;  air.(starfieldNames{i,:}).(profstr).ana.theta850];
+                anaLLSSice = [anaLLSSice; air.(starfieldNames{i,:}).(profstr).ana.theta925];
+                % store reanalysis data
+                % ana_theta850
+            else
+                if ~isnan(air.(starfieldNames{i,:}).(profstr).t850ind)
+                air.(starfieldNames{i,:}).(profstr).LTS =...
+                      air.(starfieldNames{i,:}).(profstr).theta(air.(starfieldNames{i,:}).(profstr).t850ind) - ...
+                      air.(starfieldNames{i,:}).tsurf_ocean_mean;% these numbers need to be calculated as nearest when staticP is available
+                      LTSocean = [LTSocean ;air.(starfieldNames{i,:}).(profstr).LTS ];
+                end
+                if ~isnan(air.(starfieldNames{i,:}).(profstr).t925ind)
+                air.(starfieldNames{i,:}).(profstr).LLSS=...
+                      air.(starfieldNames{i,:}).(profstr).theta(air.(starfieldNames{i,:}).(profstr).t925ind) - ...
+                      air.(starfieldNames{i,:}).tsurf_ocean_mean;% these numbers need to be calculated as nearest when staticP is available
+                
+                LLSSocean= [LLSSocean;air.(starfieldNames{i,:}).(profstr).LLSS];
+                end
+                anaLTSocean  = [anaLTSocean;  air.(starfieldNames{i,:}).(profstr).ana.theta850];
+                anaLLSSocean = [anaLLSSocean; air.(starfieldNames{i,:}).(profstr).ana.theta925];
+            end 
         
+        
+            
+        end% profiles
+         % calculate daily mean/std for C130
+            LTSice_mean    = [LTSice_mean;nanmean(LTSice)];
+            LTSice_std     = [LTSice_std;nanstd(LTSice)];
+            LLSSice_mean   = [LLSSice_mean;nanmean(LLSSice)];
+            LLSSice_std    = [LLSSocean_std;nanstd(LLSSocean)];
+            LTSocean_mean  = [LTSocean_mean;nanmean(LTSocean)];
+            LTSocean_std   = [LTSocean_std;nanstd(LTSocean)];
+            LLSSocean_mean = [LLSSocean_mean;nanmean(LLSSocean)];
+            LLSSocean_std  = [LLSSocean_std;nanstd(LLSSocean)];
+          
+         % calculate daily mean/std for MERRA
+            anaLTSice_mean    = [anaLTSice_mean;nanmean(anaLTSice)];
+            anaLTSice_std     = [anaLTSice_std;nanstd(anaLTSice)];
+            anaLLSSice_mean   = [anaLLSSice_mean;nanmean(anaLLSSice)];
+            anaLLSSice_std    = [anaLLSSocean_std;nanstd(anaLLSSocean)];
+            anaLTSocean_mean  = [anaLTSocean_mean;nanmean(anaLTSocean)];
+            anaLTSocean_std   = [anaLTSocean_std;nanstd(anaLTSocean)];
+            anaLLSSocean_mean = [anaLLSSocean_mean;nanmean(anaLLSSocean)];
+            anaLLSSocean_std  = [anaLLSSocean_std;nanstd(anaLLSSocean)];
+          
+            label_str = [label_str,{daystr(8:11)}];%  label_str{:,3}     
+            
+    end% if any profiles
+end% days
+
+%% create and save figure 13
+    % plot comparison for each day
+    % LTS
+    figure(13);
+    % plot C130
+    errorbar(1:length(label_str),LTSice_mean  ,LTSice_std,  'p','color'  ,[0.8 0.1 0.9],'markerfacecolor',[0.8 0.1 0.9],'markersize',10);  hold on;
+    errorbar(1:length(label_str),LTSocean_mean,LTSocean_std,'p','color'  ,[0.1 0.1 0.8],'markerfacecolor',[0.1 0.1 0.8],'markersize',10);  hold on;
+    % plot MERRA
+    errorbar(1:length(label_str),anaLTSice_mean  ,anaLTSice_std,  'p','color'  ,[0.1 0.9 0.5],'markerfacecolor',[0.1 0.9 0.5],'markersize',6);  hold on;
+    errorbar(1:length(label_str),anaLTSocean_mean,anaLTSocean_std,'p','color'  ,[0.8 0.8 0.1],'markerfacecolor',[0.8 0.8 0.1],'markersize',6);  hold on;
+    set(gca,'XTickLabel',{' '})  % Erase xlabels 
+    set(gca,'XTick',[1:length(label_str)]);  % Erase xlabels 
+    set(gca,'XTickLabel',{label_str{:,1},label_str{:,2},label_str{:,3},label_str{:,4},label_str{:,5},...
+                           label_str{:,6},label_str{:,7},label_str{:,8},label_str{:,9},label_str{:,10},...
+                           label_str{:,11},label_str{:,12},label_str{:,13}});
+    axis([0 14 -10 70]);
+    th=rotateticklabel(gca,90);
+    % add trend lines
+    s1=spline(1:length(label_str),LTSice_mean,1:length(label_str));
+    s2=spline(1:length(label_str),LTSocean_mean,1:length(label_str));
+    s3=spline(1:length(label_str),anaLTSice_mean,1:length(label_str));
+    s4=spline(1:length(label_str),anaLTSocean_mean,1:length(label_str));
+    plot(1:length(label_str),s1,':','color'  ,[0.8 0.1 0.9],'linewidth',1.5);hold on;
+    plot(1:length(label_str),s2,':','color'  ,[0.1 0.1 0.8],'linewidth',1.5);hold on;
+    plot(1:length(label_str),s3,':','color'  ,[0.1 0.9 0.5],'linewidth',1.5);hold on;
+    plot(1:length(label_str),s4,':','color'  ,[0.8 0.8 0.1],'linewidth',1.5);hold on;
+    
+    ylabel('\theta_{850} - LML [K]','fontsize',12);
+    h11=text(8,65,'C130 over sea-ice')  ; set(h11,'fontsize',12,'color',[0.8 0.1 0.9]);
+    h22=text(8,61,'C130over open ocean'); set(h22,'fontsize',12,'color',[0.1 0.1 0.8]);
+    h33=text(8,57,'GEOS-FP over sea-ice')  ;set(h33,'fontsize',12,'color',[0.1 0.9 0.5]);
+    h44=text(8,53,'GEOS-FP open ocean');    set(h44,'fontsize',12,'color',[0.8 0.8 0.1]);
+    
+    fi2=[strcat('F:\ARISE\ArcticCRF\figures\',label_str{:,1},'_',label_str{:,end},'LTScompareGEOS_FP_iceconc15')];
+    save_fig(13,fi2,false);
+    close(13);
+    
+%% create and save figure 14
+    % plot comparison for each day
+    % LLSS
+    figure(14);
+    % plot C130
+    errorbar(1:length(label_str),LLSSice_mean  ,LLSSice_std,  'p','color'  ,[0.8 0.1 0.9],'markerfacecolor',[0.8 0.1 0.9],'markersize',10);  hold on;
+    errorbar(1:length(label_str),LLSSocean_mean,LLSSocean_std,'p','color'  ,[0.1 0.1 0.8],'markerfacecolor',[0.1 0.1 0.8],'markersize',10);  hold on;
+    % plot MERRA
+    errorbar(1:length(label_str),anaLLSSice_mean  ,anaLLSSice_std,  'p','color'  ,[0.1 0.9 0.5],'markerfacecolor',[0.1 0.9 0.5],'markersize',6);  hold on;
+    errorbar(1:length(label_str),anaLLSSocean_mean,anaLLSSocean_std,'p','color'  ,[0.8 0.8 0.1],'markerfacecolor',[0.8 0.8 0.1],'markersize',6);  hold on;
+    set(gca,'XTickLabel',{' '})  % Erase xlabels 
+    set(gca,'XTick',[1:length(label_str)]);  % Erase xlabels 
+    set(gca,'XTickLabel',{label_str{:,1},label_str{:,2},label_str{:,3},label_str{:,4},label_str{:,5},...
+                           label_str{:,6},label_str{:,7},label_str{:,8},label_str{:,9},label_str{:,10},...
+                           label_str{:,11},label_str{:,12},label_str{:,13}});
+    axis([0 14 -10 70]);
+    th=rotateticklabel(gca,90);
+    % add trend lines
+    s1=spline(1:length(label_str),LLSSice_mean,1:length(label_str));
+    s2=spline(1:length(label_str),LLSSocean_mean,1:length(label_str));
+    s3=spline(1:length(label_str),anaLLSSice_mean,1:length(label_str));
+    s4=spline(1:length(label_str),anaLLSSocean_mean,1:length(label_str));
+    plot(1:length(label_str),s1,':','color'  ,[0.8 0.1 0.9],'linewidth',1.5);hold on;
+    plot(1:length(label_str),s2,':','color'  ,[0.1 0.1 0.8],'linewidth',1.5);hold on;
+    plot(1:length(label_str),s3,':','color'  ,[0.1 0.9 0.5],'linewidth',1.5);hold on;
+    plot(1:length(label_str),s4,':','color'  ,[0.8 0.8 0.1],'linewidth',1.5);hold on;
+    
+    ylabel('\theta_{925} - LML [K]','fontsize',12);
+    h11=text(8,65,'C130 over sea-ice')  ; set(h11,'fontsize',12,'color',[0.8 0.1 0.9]);
+    h22=text(8,61,'C130over open ocean'); set(h22,'fontsize',12,'color',[0.1 0.1 0.8]);
+    h33=text(8,57,'GEOS-FP over sea-ice')  ;set(h33,'fontsize',12,'color',[0.1 0.9 0.5]);
+    h44=text(8,53,'GEOS-FP open ocean');    set(h44,'fontsize',12,'color',[0.8 0.8 0.1]);
+    
+    fi2=[strcat('F:\ARISE\ArcticCRF\figures\',label_str{:,1},'_',label_str{:,end},'LLSScompare_GEOS_FP_iceconc15')];
+    save_fig(14,fi2,false);
+    close(14);
+    
+%% save processed air struct
+file2save=[strcat(arisedir,filename,'_w_anacompare_w_consolidatedcloudsAir_andModel', datestr(now,'yyyy-mm-dd'), '.mat')];
+save(file2save,'-struct','air');
         
 
 %% function to convert geopotential height to geometrical height [m]

@@ -12,8 +12,10 @@
 %         platform (e.g. c130)
 %   reana - struct of atmospheric profile parameters from reanalysis (e.g.
 %           MERRA)
-%   mode  - 0 combine std atm and reanalysis only
-%           1 combine, std atm, reanalysis and airborne
+%   mode  - 0 combine std atm and reanalysis only, str=MERRA/MERRA2
+%           0.1 same as 0, just for FP
+%           1 combine, std atm, reanalysis and airborne, str=C130
+%           2 same as 1, str = C130interp
 %  daystr is date yyyymmdd
 %  profstr is the profile number for each day (e.g. 'profnum1')
 % 
@@ -40,6 +42,8 @@
 % Written: Michal Segal, NASA Ames, 2015-02-25
 % MS, 2015-03-13, fixed bug in interpolation to 0 altitude in mode 0
 % MS, based on gen_atmos_rt. this version is for latest FP reanalysis data
+% MS, 2015-10-12, added mode==2 to diff between native and interpolated
+%                 C130 fields, added mode=0.5, for FP product in filename
 % -------------------------------------------------------------------------
 
 %% Start of function
@@ -50,12 +54,23 @@ plotting = false;
 %% handle inputs
 
 % airborne
-air.t = air.Static_AirT+273.15;
-air.p = air.staticP;
-air.rh= air.RH;
-air.z = air.z;
-air.h2ond=magnus(air.rh,air.t);
-air.airnd=TP2numd(air.t,air.p,'air');
+if mode==1
+    % original airborne data
+    air.t = air.Static_AirT+273.15;
+    air.p = air.staticP;
+    air.rh= air.RH;
+    air.z = air.z;
+    air.h2ond=magnus(100*air.rh,air.t);% rh needs to be in %
+    air.airnd=TP2numd(air.t,air.p,'air');
+elseif mode==2
+    % interpolated airborne data
+    air.t = air.airTinterp;
+    air.p = ana.plev;
+    air.rh= air.airRHinterp;
+    air.z = ana.zalt_mean;
+    air.h2ond=magnus(100*air.rh,air.t);% rh needs to be in %
+    air.airnd=TP2numd(air.t,air.p,'air');
+end
 
 % standard
 dir = 'F:\ARISE\ArcticCRF\METdata\atm_profiles\';
@@ -70,7 +85,7 @@ std.o2nd=std.data(:,6);
 std.co2nd=std.data(:,8);
 std.no2nd=std.data(:,9);
 
-% reanalysis
+% reanalysis/model
 ana.z = flipud(ana.zalt_mean);
 ana.p = flipud(ana.plev);          
 ana.t = flipud(ana.T_mean);         
@@ -86,7 +101,7 @@ figure(1000);
 
 % Pressure
 subplot(2,2,1);
-plot(air.p,air.z,'b.',ana.p,ana.z,'r.',std.p,std.z,'go');
+plot(air.p,air.z,'ob',ana.p,ana.z,'r.',std.p,std.z,'go');
 xlabel('Pressure [mb]');
 ylabel('Altitude [m]');
 title('Pressure');
@@ -94,7 +109,7 @@ legend('C130','reanalysis','Standard');
 
 %Temperature
 subplot(2,2,2);
-plot(air.t,air.z,'b.',ana.t,ana.z,'r.',std.t,std.z,'go');
+plot(air.t,air.z,'ob',ana.t,ana.z,'r.',std.t,std.z,'go');
 xlabel('Temperature [°C]');
 ylabel('Altitude [m]');
 title('Temperature');
@@ -108,7 +123,7 @@ subplot(2,2,3);
 % title('Relative Humidity');
 % legend('C130','reanalysis');
 %air density
-plot(air.airnd,air.z,'b.',ana.airnd,ana.z,'r.',std.airnd,std.z,'go');
+plot(air.airnd,air.z,'ob',ana.airnd,ana.z,'r.',std.airnd,std.z,'go');
 xlabel('air number density [#/cm^{-3}]');
 ylabel('Altitude [m]');
 title('Relative Humidity');
@@ -117,7 +132,7 @@ title('Air density');
 
 %water vapor mixture
 subplot(2,2,4);
-plot(air.h2ond,air.z,'b.',ana.h2ond,ana.z,'r.',std.h2ond,std.z,'go');
+plot(air.h2ond,air.z,'ob',ana.h2ond,ana.z,'r.',std.h2ond,std.z,'go');
 xlabel('Water vapor number density [#/cm^{-3}]');
 ylabel('Altitude [m]');
 title('Water vapor');
@@ -128,6 +143,10 @@ save_fig(1000,[dir,'atm_profiles_' daystr '_' profstr],true);
 end
 
 %% Select the correct values, first from airborne, then from reanalysis, then from standard
+
+mode_ = mode;
+mode = round(mode_);
+
 if mode==0
     % assign altitude according to reanalysis
     % only up to 30km - for Tinterp
@@ -149,7 +168,12 @@ if mode==0
     ana.Oz=interp1(ana.z,ana.o3nd,Z,'linear','extrap');
     % ana.Oz=interp1(ana.zz,ana.o3nd(ana.i),Z,'linear','extrap');
     
-    modestr = 'MERRA';
+     if     mode_==0
+         modestr = 'MERRA';
+    elseif mode_==0.1
+         modestr = 'GEOS_FP';
+    end
+   
     
 else
     % assign altitude according to airborne
@@ -160,11 +184,12 @@ else
     [air.zz,air.i]=sort(air.z);
     [air.zz,air.ia]=unique(air.zz);
     air.i=air.i(air.ia);
-
-    air.Tz=interp1(air.zz,air.t(air.i),Z);
-    air.Pz=interp1(air.zz,air.p(air.i),Z);
-    air.Hz=interp1(air.zz,air.h2ond(air.i),Z);
-    air.Az=interp1(air.zz,air.airnd(air.i),Z);
+    
+    % need to interp the last (lowest pressure by ana/air)
+    air.Tz=interp1(air.zz,air.t(air.i),Z);     air.Tz(end)=interp1(air.zz(1:3),air.t(1:3),Z(end),    'linear','extrap');
+    air.Pz=interp1(air.zz,air.p(air.i),Z);     air.Pz(end)=interp1(air.zz(1:3),air.p(1:3),Z(end),    'linear','extrap');
+    air.Hz=interp1(air.zz,air.h2ond(air.i),Z); air.Hz(end)=interp1(air.zz(1:3),air.h2ond(1:3),Z(end),'linear','extrap');
+    air.Az=interp1(air.zz,air.airnd(air.i),Z); air.Az(end)=interp1(air.zz(1:3),air.airnd(1:3),Z(end),'linear','extrap');
     
     % interp reanalysis according to airborne
     ana.Tz=interp1(ana.z,ana.t,Z);
@@ -173,14 +198,18 @@ else
     ana.Az=interp1(ana.z,ana.airnd,Z);
     ana.Oz=interp1(ana.z,ana.o3nd,Z);
     
-    modestr = 'C130';
+    if     mode==1
+        modestr = 'C130';
+    elseif mode==2
+        modestr = 'C130interp';
+    end
     
     % test figure;
-    figure;
-    plot(ana.z,ana.airnd,'.b');hold on;
-    plot(Z,ana.Az,'.r')       ;hold on;
-    plot(std.z,std.airnd,'.g');hold on;
-    legend('ana-original','ana-interp','std');
+%     figure;
+%     plot(ana.z,ana.airnd,'ob');hold on;
+%     plot(Z,ana.Az,'.r')       ;hold on;
+%     plot(std.z,std.airnd,'.g');hold on;
+%     legend('ana-original','ana-interp','std');
     
 end
 
@@ -279,7 +308,7 @@ atm.no2=interp1(std.z,std.no2nd,Z).*atm.ratio;
 
 if plotting
  figure; plot(atm.P,Z); title('Pressure');
- figure; plot(atm.T,Z); title('Temperature');
+ figure; plot(atm.T,Z,'.b'); title('Temperature');
  figure; plot(atm.H,Z); title('Water vapor');
  figure; plot(atm.air,Z); title('air density');
  figure; plot(atm.o3,Z); title('Ozone');
@@ -323,7 +352,7 @@ Na   = 6.0221413e23;    % Avogadro number
 R    = 287.05;          % gas constant J/(kgK)
 
 % calculate
-dens    = (pst*100)/(R*temp);               % row=P/RT: conversion from hPa to kg/m3
+dens    = (pst*100)./(R*temp);              % row=P/RT: conversion from hPa to kg/m3
 numdens = dens*(1/Mw)*Na *(1000/(100)^3);   % conversion from kg/m3 to #/cm3
 d = numdens;
 return;
