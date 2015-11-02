@@ -1,6 +1,6 @@
 %% Details of the function:
 %  NAME:
-% air_model_combine
+% air_model_combine(model_type)
 %----------------------------------
 % PURPOSE:
 %  - combine vertical profiles for ARISE
@@ -8,7 +8,7 @@
 %    and generate profiles for RT simulations
 %
 % CALLING SEQUENCE:
-%  air_model_combine
+%  air_model_combine(model_type)
 %
 % INPUT:
 %  - air.mat structure of C-130 SeaIce profile summary
@@ -33,6 +33,9 @@
 % - e.g.:F:\ARISE\C-130data\Met\ARISEairprocessed.mat
 % - e.g. F:\ARISE\ArcticCRF\METdata\GEOS_FP\ariseFPdata\...
 %           GEOS.fp.asm.inst3_3d_asm_Np.20140904_0000.V01.nc4
+% - model input is a string 'GEOS' or 'MERRA' to allow incorporate
+%   the different time arrays (separate for GEOS-FP and all 8 times in
+%   MERRA)
 %
 % EXAMPLE:
 %  - air_model_combine
@@ -42,6 +45,7 @@
 % Written: Michal Segal-Rozenhaimer (MS), NASA Ames,Sep-25-2015
 % modified from star_ana_compare to use only relevant profiles
 % when reading model files
+% MS, 2015-10-26, added interpolated cloud parameters into saved struct
 % -------------------------------------------------------------------------
 %% function routine
 function air_model_combine
@@ -763,7 +767,9 @@ for i=1:nFields
             if air.(starfieldNames{i,:}).(profstr).cld.cldbelow==1  airCldprof (1:ibot)=1; end  
             % eliminate non corresponding altitudes
             airCldprof(itop+1:end) = NaN;
-            
+            % save into struct
+            air.(starfieldNames{i,:}).(profstr).cflagInterp = airCldprof;
+            % save into array
             cflag_air = [cflag_air; airCldprof(1:p)'];
             
             %% compile cloud wc into reanalysis levels
@@ -773,6 +779,9 @@ for i=1:nFields
             airWCmean(airWCmean<0) = NaN;
             % eliminate non corresponding altitudes
             airWCmean(itop+1:end) = NaN;
+            % save into struct
+            air.(starfieldNames{i,:}).(profstr).cwcInterp = airWCmean;
+            % save into array
             cwc_air = [cwc_air; airWCmean(1:p)'];
             
             %% compile cloud ic into reanalysis levels
@@ -782,8 +791,11 @@ for i=1:nFields
                                               abs(air.(starfieldNames{i,:}).(profstr).LWC1_gm3)));
                                                    
             airICmean(airICmean<0) = NaN; 
-             % eliminate non corresponding altitudes
+            % eliminate non corresponding altitudes
             airICmean(itop+1:end) = NaN;
+            % save into struct
+            air.(starfieldNames{i,:}).(profstr).cicInterp = airICmean;
+            % save into array
             cic_air = [cic_air; airICmean(1:p)'];
             
             

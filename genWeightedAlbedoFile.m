@@ -29,7 +29,8 @@
 %
 % MODIFICATION HISTORY:
 % Written: Michal Segal-Rozenhaimer (MS), NASA Ames,Mar-06,2015  
-%
+% MS, 2015-10-27, added new profile run with GEOS_FP
+%                 changed iceconc to iceconc_mean
 % ---------------------------------------------------------------------------
 %% function routine
 function [filen] = genWeightedAlbedoFile
@@ -41,7 +42,8 @@ startup_plotting;
 %% load arise struct .mat that contains ice_conc per profile
 arisedir = 'F:\ARISE\C-130data\Met\SeaIceProfiles\';
 filename = 'ARISEairprocessed_with_insitu_woRH';
-file2load=[strcat(arisedir,filename,'_w_anacompare_w_cldflag_noCloudBelow_andProperties20150306.mat')];
+%file2load=[strcat(arisedir,filename,'_w_anacompare_w_cldflag_noCloudBelow_andProperties20150306.mat')];
+file2load=[arisedir,'ARISEairprocessed_with_insitu_withWVparams20150921_w_anacompare_w_consolidatedcloudsAir_andModel2015-10-26.mat'];
 s = load(file2load);
 
 %% load "pure" (water/ice) albedo files
@@ -67,7 +69,7 @@ for i=1:nFields
       
         for j=1:nProfiles
             profstr    = strcat('profnum',num2str(j));
-            iceconc    = (s.(starfieldNames{i,:}).(profstr).iceconc)/100;
+            iceconc    = (s.(starfieldNames{i,:}).(profstr).iceconc_mean)/100;
             
             % sw albedo
             sw_wln        = sw_albedo_water(:,1);%in nm
