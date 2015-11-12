@@ -169,7 +169,7 @@ if mode==0
     % ana.Oz=interp1(ana.zz,ana.o3nd(ana.i),Z,'linear','extrap');
     
      if     mode_==0
-         modestr = 'MERRA';
+         modestr = 'MERRA2';
     elseif mode_==0.1
          modestr = 'GEOS_FP';
     end

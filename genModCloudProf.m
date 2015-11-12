@@ -9,17 +9,21 @@
 %    
 %
 % CALLING SEQUENCE:
-%   [c] = genModCloudProf(prof,dprof,allprof,daystr,doy,datsource,ctype,cReff);
+%   [c] = genModCloudProf(model,prof,dprof,allprof,daystr,doy,datsource,atmsource,ctype,cReff);
 %
 % INPUT:
+%  - model is the model source (e.g., 'MERRA2','GEOS-FP' etc.)
 %  - prof is a struct containing vertical profile data (from either model/aircraft)
 %  - dprof is profile number within each day - integer
 %  - allprof is consecutive profile number (from total) - integer
 %  - daystr is date ('yyyy-mm-dd') - string
 %  - doy is day of yesr (string)
 %  - datsource is data source ('mod'/'air');
-%  - ctype is cloud type 'wc'/'ic'/'mx'
-%  - cReff is Reff 10,15,20 for 'wc', 15,20,30 for 'ic' - double
+%  - atmsource is atmospheric profile source ('mod/'air')
+%  - ctype is cloud type 'wc'/'ic'/'mx' or ice as water (iawc),
+%    mxflp(ice/liq is flipped)
+%  - cReff is Reff 10,15,20 for 'mx' both ice and liquid are similar
+%  - 0 is original Reff from in-situ
 % 
 % 
 % OUTPUT:
@@ -34,29 +38,40 @@
 % NEEDED FILES/INPUT:
 %
 % EXAMPLE:
-%  - [c] = genModCloudProf(prof,dprof,allprof,daystr,doy,datsource,ctype,cReff)
+%  - [c] = genModCloudProf(model,prof,dprof,allprof,daystr,doy,datsource,atmsource,ctype,cReff)
 %
 %
 % MODIFICATION HISTORY:
 % Written: Michal Segal-Rozenhaimer (MS), NASA Ames,Oct-12,2015  
 % Based on genAirCloudProf
-% Modified: 2015-10-26, MS: added function capabilities
+% Modified: 2015-10-26, MS: added function capabilities to accept more
+%                           options
+% Modified: 2015-11-11, MS: changed cloud bot to 0 at LML
 % ---------------------------------------------------------------------------
 %% function routine
-function [c] = genModCloudProf(prof,dprof,allprof,daystr,doy,datsource,ctype,cReff)
+function [c] = genModCloudProf(model,prof,dprof,allprof,daystr,doy,datsource,atmsource,ctype,cReff)
 
 version_set('1.1');
 startup_plotting;
 
-%% cloud flag
-if strcmp(datsource,'air')
+%% cloud flag and cloud water content assignments
+
+% constrain model vertical data to correspond with aircraft
+
+   hl = find(isnan(prof.cflagInterp));
+
+if strcmp(datsource,'air') && (strcmp(ctype,'wc') || strcmp(ctype,'ic') || strcmp(ctype,'mx'))
     cloudflag = (prof.cflagInterp)';
     cloudwc   = (prof.cwcInterp)';
     cloudic   = (prof.cicInterp)';
-elseif strcmp (datsource,'mod')
-    cloudflag = prof.ana.cflag;
-    cloudwc   = prof.ana.lwc;
-    cloudic   = prof.ana.iwc;
+elseif strcmp (datsource,'mod') && (strcmp(ctype,'wc') || strcmp(ctype,'ic') || strcmp(ctype,'mx'))
+    cloudflag = prof.ana.cflag; cloudflag(hl(1):end) = 0;
+    cloudwc   = prof.ana.lwc;   cloudwc(hl(1):end)   = 0;
+    cloudic   = prof.ana.iwc;   cloudic(hl(1):end)   = 0;
+elseif strcmp (datsource,'mod') && (strcmp(ctype,'iawc') || strcmp(ctype,'mxflp'))
+    cloudflag = prof.ana.cflag; cloudflag(hl(1):end) = 0;
+    cloudwc   = prof.ana.iwc;   cloudwc(hl(1):end)   = 0;
+    cloudic   = prof.ana.lwc;   cloudic(hl(1):end)   = 0;
 end
 
 cdiff = diff(double(cloudflag));
@@ -144,31 +159,51 @@ if c.cldnum>0
     c.cldthick = prof.ana.zalt_mean(c.cldend) - prof.ana.zalt_mean(c.cldstart);
     c.cldtop   = prof.ana.zalt_mean(c.cldend);
     c.cldbot   = prof.ana.zalt_mean(c.cldstart);
+    
+    % change cloud bot from LML to 0
+    
+    if c.cldstart(1)==1
+        c.cldbot(1) = 0;
+    end
+    
+    % check if ctop & cbot are in same layer
+    
+    levels = diff(prof.ana.zalt_mean);
+    
+    for kk=1:c.cldnum
+        
+        if c.cldtop(kk)==c.cldbot(kk)
+            % compute again accoding to layer thickness
+            c.cldbot(kk)   = c.cldbot(kk);
+            c.cldtop(kk)   = c.cldbot(kk) + levels(c.cldstart(kk)-1);
+            c.cldthick(kk) = c.cldtop(kk) - c.cldbot(kk); % or: levels(c.cldstart(kk)-1)
+        end
+        
+    end
 
 
 %% cloud Reff
 
     c.cldreff   = NaN(c.cldnum,1);
     
-    if cReff>=10
-        c.cldreff = NaN(c.cldnum,1);
-    else
-        c.cldreffWC = NaN(c.cldnum,1);
-        c.cldreffIC = NaN(c.cldnum,1);
+    if     cReff>=0  && (strcmp(ctype,'wc') || strcmp(ctype,'ic') || strcmp(ctype,'iawc'))
+                    c.cldreff = NaN(c.cldnum,1);
+    elseif cReff>=10 && (strcmp(ctype,'mx') || strcmp(ctype,'mxflp'))
+                    c.cldreffWC = NaN(c.cldnum,1);
+                    c.cldreffIC = NaN(c.cldnum,1);
     end
 
     for i=1:c.cldnum
-        if cReff>=10
-            c.cldreff(i) = cReff;
-        elseif cReff==1
-            c.cldreffWC(i) = 10;
-            c.cldreffIC(i) = 15;
-        elseif cReff==2
-            c.cldreffWC(i) = 15;
-            c.cldreffIC(i) = 20;
-        elseif cReff==3
-            c.cldreffWC(i) = 20;
-            c.cldreffIC(i) = 30;
+        if     cReff==0  && (strcmp(ctype,'wc') || strcmp(ctype,'ic') || strcmp(ctype,'iawc'))
+                    c.cldreff(i) = nanmean(prof.cld.cldreff);
+        elseif cReff>=10 && (strcmp(ctype,'wc') || strcmp(ctype,'ic') || strcmp(ctype,'iawc'))
+                    c.cldreff(i) = cReff;
+        elseif cReff==0  && (strcmp(ctype,'mx') || strcmp(ctype,'mxflp'))
+                    c.cldreffWC(i) = nanmean(prof.cld.cldreff);
+                    c.cldreffIC(i) = nanmean(prof.cld.cldreff);
+        elseif cReff>=10 && (strcmp(ctype,'mx') || strcmp(ctype,'mxflp'))
+                    c.cldreffWC(i) = cReff;
+                    c.cldreffIC(i) = cReff;
         end
     end
 
@@ -184,7 +219,7 @@ if c.cldnum>0
 
     for i=1:c.cldnum
 
-        if strcmp(ctype,'wc')
+        if strcmp(ctype,'wc') || strcmp(ctype,'iawc')
             c.cldphase(i) = 0;
             if c.cldstart(i)>2
                 c.cldwc(i)    = nanmean(cloudwc(c.cldstart(i)-2:c.cldstart(i)+2));
@@ -250,21 +285,21 @@ end% if cloud
            
           
            % assign params
-           cldtop   = c.cldtop;
-           cldbot   = c.cldbot;
-           cldthick = c.cldthick;
-           cldphase = c.cldphase;
-           cldreff  = c.cldreff;
+           cldtop   = flipud(c.cldtop);
+           cldbot   = flipud(c.cldbot);
+           cldthick = flipud(c.cldthick);
+           cldphase = flipud(c.cldphase);
+           cldreff  = flipud(c.cldreff);
            
            %% write cloud params to file for RT
            %-----------------------------------
            % write data to file
            % this is for RT simulation input
            dirsave = 'C:\cygwin\home\msegalro\libradtran\input\CRF\arise\';
-           filen=[dirsave, 'cloud4RT_', datsource, '_', ctype, '_', num2str(cReff), '.txt'];
+           filen=[dirsave, 'cloud4RT_datsource_', datsource, '_atmsource_', atmsource, '_', ctype, '_', num2str(cReff),'_for',model, '.txt'];
            disp( ['Writing to file: ' filen]);
            prof.iceconc = prof.iceconc_mean;
-           if strcmp(datsource,'air')
+           if strcmp(atmsource,'air')
                 [filepath filename ext] = fileparts(prof.airAtmInterp);
            else
                 [filepath filename ext] = fileparts(prof.ana.atmfile);
@@ -272,7 +307,7 @@ end% if cloud
            
            atmosfile = strcat(filename, ext);
            
-           if strcmp(ctype,'mx')
+           if strcmp(ctype,'mx') || strcmp(ctype,'mxflp')
                        if prof.iceconc >15
                            s_albedo_file = 'albedo_ice.dat';%strcat('F:\ARISE\ArcticCRF\METdata\albedo\albedo_ice.dat');
                            w_albedo_file = strcat('albedo_ice_' ,num2str(round(prof.iceconc)),'.dat');
@@ -310,7 +345,7 @@ end% if cloud
                                   ' cloudic '   num2str(c.cldic') '  '}];
                        end
                        
-           elseif strcmp(ctype,'wc')
+           elseif strcmp(ctype,'wc') || strcmp(ctype,'iawc')
                
                         if prof.iceconc >15
                            s_albedo_file = 'albedo_ice.dat';%strcat('F:\ARISE\ArcticCRF\METdata\albedo\albedo_ice.dat');

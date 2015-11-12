@@ -127,6 +127,8 @@ if c.cldnum==0
     c.cldbot   = [];
     c.cldphase = [];
     c.cldreff  = [];
+    c.cldreffWC  = [];
+    c.cldreffIC  = [];
     c.cldwc    = [];
     c.cldic    = [];
     c.cldflag  = zeros(length(prof.time),1);
@@ -146,69 +148,71 @@ if c.cldnum>0
 
 %% cloud Reff
 
-if cReff>=10
-    c.cldreff = NaN(c.cldnum,1);
-else
-    c.cldreffWC = NaN(c.cldnum,1);
-    c.cldreffIC = NaN(c.cldnum,1);
-end
-
-for i=1:c.cldnum
+    c.cldreff   = NaN(c.cldnum,1);
+    
     if cReff>=10
-        c.cldreff(i) = cReff;
-    elseif cReff==1
-        c.cldreffWC(i) = 10;
-        c.cldreffIC(i) = 15;
-    elseif cReff==2
-        c.cldreffWC(i) = 15;
-        c.cldreffIC(i) = 20;
-    elseif cReff==3
-        c.cldreffWC(i) = 20;
-        c.cldreffIC(i) = 30;
+        c.cldreff = NaN(c.cldnum,1);
+    else
+        c.cldreffWC = NaN(c.cldnum,1);
+        c.cldreffIC = NaN(c.cldnum,1);
     end
-end
+
+    for i=1:c.cldnum
+        if cReff>=10
+            c.cldreff(i) = cReff;
+        elseif cReff==1
+            c.cldreffWC(i) = 10;
+            c.cldreffIC(i) = 15;
+        elseif cReff==2
+            c.cldreffWC(i) = 15;
+            c.cldreffIC(i) = 20;
+        elseif cReff==3
+            c.cldreffWC(i) = 20;
+            c.cldreffIC(i) = 30;
+        end
+    end
 
 
 %% cloud phase and cloud water content
 % !!! this is only by pre-assignment to test sensitivity (w/i/m)
 
-c.cldphase = zeros(c.cldnum,1);
-c.cldwc    = zeros(c.cldnum,1);
-c.cldic    = zeros(c.cldnum,1);
+    c.cldphase = zeros(c.cldnum,1);
+    c.cldwc    = zeros(c.cldnum,1);
+    c.cldic    = zeros(c.cldnum,1);
 
-% 0 is water (or supercooled), 1 is ice, 2 is mixed
+    % 0 is water (or supercooled), 1 is ice, 2 is mixed
 
-for i=1:c.cldnum
-    
-    if strcmp(ctype,'wc')
-        c.cldphase(i) = 0;
-        if c.cldstart(i)>2
-            c.cldwc(i)    = nanmean(cloudwc(c.cldstart(i)-2:c.cldstart(i)+2));
+    for i=1:c.cldnum
+
+        if strcmp(ctype,'wc')
+            c.cldphase(i) = 0;
+            if c.cldstart(i)>2
+                c.cldwc(i)    = nanmean(cloudwc(c.cldstart(i)-2:c.cldstart(i)+2));
+            else
+                c.cldwc(i)    = nanmean(cloudwc(c.cldstart(i):c.cldstart(i)+2));
+            end
+        elseif strcmp(ctype,'ic')
+            c.cldphase(i) = 1;
+            if c.cldstart(i)>2
+                c.cldic(i)    = nanmean(cloudic(c.cldstart(i)-2:c.cldstart(i)+2));
+            else
+                c.cldic(i)    = nanmean(cloudic(c.cldstart(i):c.cldstart(i)+2));
+            end
         else
-            c.cldwc(i)    = nanmean(cloudwc(c.cldstart(i):c.cldstart(i)+2));
+            c.cldphase(i) =2;
+            if c.cldstart(i)>2
+                c.cldwc(i)    = nanmean(cloudwc(c.cldstart(i)-2:c.cldstart(i)+2));
+                c.cldic(i)    = nanmean(cloudic(c.cldstart(i)-2:c.cldstart(i)+2));
+            else
+                c.cldwc(i)    = nanmean(cloudwc(c.cldstart(i):c.cldstart(i)+2));
+                c.cldic(i)    = nanmean(cloudic(c.cldstart(i):c.cldstart(i)+2));
+            end
         end
-    elseif strcmp(ctype,'ic')
-        c.cldphase(i) = 1;
-        if c.cldstart(i)>2
-            c.cldic(i)    = nanmean(cloudic(c.cldstart(i)-2:c.cldstart(i)+2));
-        else
-            c.cldic(i)    = nanmean(cloudic(c.cldstart(i):c.cldstart(i)+2));
-        end
-    else
-        c.cldphase(i) =2;
-        if c.cldstart(i)>2
-            c.cldwc(i)    = nanmean(cloudwc(c.cldstart(i)-2:c.cldstart(i)+2));
-            c.cldic(i)    = nanmean(cloudic(c.cldstart(i)-2:c.cldstart(i)+2));
-        else
-            c.cldwc(i)    = nanmean(cloudwc(c.cldstart(i):c.cldstart(i)+2));
-            c.cldic(i)    = nanmean(cloudic(c.cldstart(i):c.cldstart(i)+2));
-        end
+
+        if (c.cldwc(i)<=0 || isnan(c.cldwc(i))) c.cldwc(i) = 0.001; end;
+        if (c.cldic(i)<=0 || isnan(c.cldic(i))) c.cldic(i) = 0.001; end; 
+
     end
-    
-    if (c.cldwc(i)<=0 || isnan(c.cldwc(i))) c.cldwc(i) = 0.001; end;
-    if (c.cldic(i)<=0 || isnan(c.cldic(i))) c.cldic(i) = 0.001; end; 
-        
-end
 
 end% if cloud
 
@@ -283,7 +287,7 @@ end% if cloud
                            line=[{'date ' daystr ' profilenum ' num2str(dprof) ' DOY ' doy ' sza ' num2str(sza) ' lat ' num2str(lat) ' lon ' num2str(lon) ...
                                   ' single albedo file ' s_albedo_file ' ice_conc ' num2str(round(prof.iceconc)) ' weighted albedo file ' w_albedo_file ' atmos file ' atmosfile...
                                   ' platform_low_alt ' num2str(c.c130sur_alt) ' numclouds ' num2str(c.cldnum) ' cloudabove ' num2str(c.cldabove) ' cloudbelow ' num2str(c.cldbelow) ' cloudtop ' num2str(cldtop'/1000)...
-                                  ' cloudbot '  num2str(cldbot'/1000) ' cloudthick ' num2str(cldthick'/1000) ' cloudreffwc ' num2str(c.cldreffWC') ' cloudreffIW ' num2str(c.cldreffIW') ...
+                                  ' cloudbot '  num2str(cldbot'/1000) ' cloudthick ' num2str(cldthick'/1000) ' cloudreffwc ' num2str(c.cldreffWC') ' cloudreffic ' num2str(c.cldreffIC') ...
                                   ' cloudphase ' num2str(cldphase') ' cloudwc '   num2str(c.cldwc') ' cloudic '   num2str(c.cldic') '  '}];
                        end
            elseif strcmp(ctype,'ic')

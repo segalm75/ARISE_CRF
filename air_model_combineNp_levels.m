@@ -33,9 +33,9 @@
 % - e.g.:F:\ARISE\C-130data\Met\ARISEairprocessed.mat
 % - e.g. F:\ARISE\ArcticCRF\METdata\GEOS_FP\ariseFPdata\...
 %           GEOS.fp.asm.inst3_3d_asm_Np.20140904_0000.V01.nc4
-% - model input is a string 'GEOS' or 'MERRA' to allow incorporate
+% - model type is a string 'GEOS' or 'MERRA2' to allow incorporate
 %   the different time arrays (separate for GEOS-FP and all 8 times in
-%   MERRA)
+%   MERRA/MERRA2)
 %
 % EXAMPLE:
 %  - air_model_combine
@@ -46,10 +46,12 @@
 % modified from star_ana_compare to use only relevant profiles
 % when reading model files
 % MS, 2015-10-26, added interpolated cloud parameters into saved struct
+% MS, 2015-11-02, added option to read either GEOS-FP or MERRA2
+%                 added option to handle profiles with no clouds for model
 % -------------------------------------------------------------------------
 %% function routine
-function air_model_combine(model_type)
-clear all; close all;
+function air_model_combineNp_levels(model_type)
+% clear all; close all;
 startup_plotting; 
 
 % prepare for plotting
@@ -147,19 +149,26 @@ for i=1:nFields
     ice = readAMSR2dataV2({daystr(4:11)});%
     
     % get reanalysis files for each day
-    day        = daystr(4:11);  
-    file       = strcat('GEOS.fp.asm.inst3_3d_asm_Np.',day,'*','nc4');
+    day        = daystr(4:11); 
+    if strcmp(model_type,'GEOS')
+        file       = strcat('GEOS.fp.asm.inst3_3d_asm_Np.',day,'*','nc4');
+    else
+        file       = strcat('MERRA2_400.inst3_3d_asm_Np.' ,day,'*','nc4');
+    end
+        
     anaDirInfo = dir([reanadir file]);
     
-    % extract forecast time fields
-        for kk=1:length(anaDirInfo)
-             dm{kk}       = strsplit_ms(anaDirInfo(kk).name,'.');
-             daytimes(kk) = dm{kk}(4);
-             stime        = (strsplit_ms(daytimes(kk),'_')); ttmp = cellstr(stime{:});
-             % convert to decimal time
-             dectimes(kk) = str2double(ttmp{:}(1:2)) + ...
-                            str2double(ttmp{:}(3:4))/60;
-        end
+    % extract forecast time fields from filename
+    if strcmp(model_type,'GEOS')
+            for kk=1:length(anaDirInfo)
+                 dm{kk}       = strsplit_ms(anaDirInfo(kk).name,'.');
+                 daytimes(kk) = dm{kk}(4);
+                 stime        = (strsplit_ms(daytimes(kk),'_')); ttmp = cellstr(stime{:});
+                 % convert to decimal time
+                 dectimes(kk) = str2double(ttmp{:}(1:2)) + ...
+                                str2double(ttmp{:}(3:4))/60;
+            end
+    end
     
     legendall ={};
     
@@ -200,10 +209,18 @@ for i=1:nFields
             proftime = nanmean(air.(daystr).(profstr).time);
             
             % choose closest file in time
-            [imin,ind] = min(abs(dectimes-proftime));
-            cfile      = strcat('GEOS.fp.asm.inst3_3d_asm_Np.',daytimes{ind},'*','nc4');
-            fileInfo   = dir([reanadir cfile]);
-            fileinfoNp = ncinfo([reanadir,fileInfo.name]);
+            if strcmp(model_type,'GEOS')
+                [imin,ind] = min(abs(dectimes-proftime));
+                cfile      = strcat('GEOS.fp.asm.inst3_3d_asm_Np.',daytimes{ind},'*','nc4');
+                fileInfo   = dir([reanadir cfile]);
+                fileinfoNp = ncinfo([reanadir,fileInfo.name]);
+            else
+                fileInfo   = anaDirInfo;
+                fileinfoNp = ncinfo([reanadir,fileInfo.name]);
+                time_min= ncread([reanadir,fileInfo.name], 'time');
+                time_hr = double(time_min/60);
+                [imin,ind] = min(abs(time_hr-proftime));
+            end
             
             % read essential vars
             lon = ncread([reanadir,fileInfo.name], 'lon');
@@ -228,7 +245,16 @@ for i=1:nFields
                  for l = 1:length(vars)
 
                      % read vars
-                     vartmp = ncread([reanadir,fileInfo.name], vars{l});
+                     if strcmp(model_type,'GEOS')
+                        vartmp  = ncread([reanadir,fileInfo.name], vars{l});
+                     else
+                        vartmp_ = ncread([reanadir,fileInfo.name], vars{l});
+                        if l==1
+                            vartmp = vartmp_;
+                        else
+                            vartmp  = squeeze(vartmp_(:,:,:,ind));
+                        end
+                     end
 
                      % read in relevant profiles, make stats
                      if l>1 % all vars except pressure levels
@@ -240,6 +266,14 @@ for i=1:nFields
                                      % replace missiing values with NaN
                                      tmp_avg ( tmp_avg >1E14) = NaN;
                                      tmp_std ( tmp_avg >1E14) = NaN;
+                                     
+                                     % interpolate if have levels with NaN
+                                     
+                                     if sum(isnan(tmp_avg))>0
+                                         
+                                         tmp_avg(1) = interp1(air.(starfieldNames{i,:}).(profstr).ana.(strcat('p',vars{1}))(2:8),tmp_avg(2:8),...
+                                                              air.(starfieldNames{i,:}).(profstr).ana.(strcat('p',vars{1}))(1),'linear','extrap');
+                                     end
 
                                      % save into air struct
                                      air.(starfieldNames{i,:}).(profstr).ana.(strcat(vars{l},'_mean')) = tmp_avg;
@@ -252,16 +286,33 @@ for i=1:nFields
                                      % replace missiing values with NaN
                                      tmp_avg ( tmp_avg >1E14) = NaN;
                                      tmp_std ( tmp_avg >1E14) = NaN;
+                                     
+                                     % interpolate if have levels with NaN
+                                     
+                                     if sum(isnan(tmp_avg))>0
+                                         
+                                         tmp_avg(1) = interp1(air.(starfieldNames{i,:}).(profstr).ana.(strcat('p',vars{1}))(2:8),tmp_avg(2:8),...
+                                                              air.(starfieldNames{i,:}).(profstr).ana.(strcat('p',vars{1}))(1),'linear','extrap');
+                                     end
 
                                      % save into air struct
                                      air.(starfieldNames{i,:}).(profstr).ana.(strcat(vars{l},'_mean')) = tmp_avg;
                                      air.(starfieldNames{i,:}).(profstr).ana.(strcat(vars{l},'_std'))  = tmp_std;
                             else
+                                     % these are pressure levels
                                      tmp_avg = squeeze(nanmean(nanmean(vartmp([lonintrp],[latintrp],:))));  
                                      tmp_std = squeeze(nanstd(nanstd(vartmp([lonintrp], [latintrp],:))));
                                      % replace missiing values with NaN
                                      tmp_avg ( tmp_avg >1E14) = NaN;
                                      tmp_std ( tmp_avg >1E14) = NaN;
+                                     
+                                     % interpolate if have levels with NaN
+                                     
+                                     if sum(isnan(tmp_avg))>0
+                                         
+                                         tmp_avg(1) = interp1(air.(starfieldNames{i,:}).(profstr).ana.(strcat('p',vars{1}))(2:8),tmp_avg(2:8),...
+                                                              air.(starfieldNames{i,:}).(profstr).ana.(strcat('p',vars{1}))(1),'linear','extrap');
+                                     end
 
                                      % save into air struct
                                      air.(starfieldNames{i,:}).(profstr).ana.(strcat(vars{l},'_mean')) = tmp_avg;
@@ -377,24 +428,31 @@ for i=1:nFields
 %                  p = 17;
 %              end
              
-           if sum(air.(starfieldNames{i,:}).(profstr).ana.cflag)>0
-               if  min(find(air.(starfieldNames{i,:}).(profstr).ana.cflag(1:p)==1))==1
-                   % CTH and CBH are taken at center of pressure level
-                   % plus/minus 100m (which is about half layer)
-                   air.(starfieldNames{i,:}).(profstr).ana.cbh   = 0;
-                   air.(starfieldNames{i,:}).(profstr).ana.cth   = ...
-                   air.(starfieldNames{i,:}).(profstr).ana.zalt_mean(max(find(air.(starfieldNames{i,:}).(profstr).ana.cflag(1:p)==1)))+100;
-                   air.(starfieldNames{i,:}).(profstr).ana.ctk   = air.(starfieldNames{i,:}).(profstr).ana.cth - ...
-                                                                   air.(starfieldNames{i,:}).(profstr).ana.cbh;
-               else
-                   air.(starfieldNames{i,:}).(profstr).ana.cbh   = ...
-                   air.(starfieldNames{i,:}).(profstr).ana.zalt_mean(min(find(air.(starfieldNames{i,:}).(profstr).ana.cflag(1:p)==1)))-100;
-                   air.(starfieldNames{i,:}).(profstr).ana.cth   = ...
-                   air.(starfieldNames{i,:}).(profstr).ana.zalt_mean(max(find(air.(starfieldNames{i,:}).(profstr).ana.cflag(1:p)==1)))+100;
-                   
-                   air.(starfieldNames{i,:}).(profstr).ana.ctk   = air.(starfieldNames{i,:}).(profstr).ana.cth - ...
-                                                                   air.(starfieldNames{i,:}).(profstr).ana.cbh;
-               end
+           if sum(air.(starfieldNames{i,:}).(profstr).ana.cflag)>0 % if clouds
+                       if  min(find(air.(starfieldNames{i,:}).(profstr).ana.cflag(1:p)==1))==1
+                           % CTH and CBH are taken at center of pressure level
+                           % plus/minus 100m (which is about half layer)
+                           air.(starfieldNames{i,:}).(profstr).ana.cbh   = 0;
+                           air.(starfieldNames{i,:}).(profstr).ana.cth   = ...
+                           air.(starfieldNames{i,:}).(profstr).ana.zalt_mean(max(find(air.(starfieldNames{i,:}).(profstr).ana.cflag(1:p)==1)))+100;
+                           air.(starfieldNames{i,:}).(profstr).ana.ctk   = air.(starfieldNames{i,:}).(profstr).ana.cth - ...
+                                                                           air.(starfieldNames{i,:}).(profstr).ana.cbh;
+                       else
+                           air.(starfieldNames{i,:}).(profstr).ana.cbh   = ...
+                           air.(starfieldNames{i,:}).(profstr).ana.zalt_mean(min(find(air.(starfieldNames{i,:}).(profstr).ana.cflag(1:p)==1)))-100;
+                           air.(starfieldNames{i,:}).(profstr).ana.cth   = ...
+                           air.(starfieldNames{i,:}).(profstr).ana.zalt_mean(max(find(air.(starfieldNames{i,:}).(profstr).ana.cflag(1:p)==1)))+100;
+
+                           air.(starfieldNames{i,:}).(profstr).ana.ctk   = air.(starfieldNames{i,:}).(profstr).ana.cth - ...
+                                                                           air.(starfieldNames{i,:}).(profstr).ana.cbh;
+                       end
+                       
+           else % if no clouds
+               
+                           air.(starfieldNames{i,:}).(profstr).ana.cbh   = 0;
+                           air.(starfieldNames{i,:}).(profstr).ana.cth   = 0;
+                           air.(starfieldNames{i,:}).(profstr).ana.ctk   = 0;
+               
            end
            
            %-----------------------------------------------------------------------------------------------------------------
@@ -457,9 +515,16 @@ for i=1:nFields
             
            %% generate atmospheric profiles for RT simulations
            %  this is for model/reanalysis (using std atmosphere and model)
-           %  mode=0 is for MERRA, 0.1 is for GEOS-FP
+           %  mode=0 is for MERRA2, 0.1 is for GEOS-FP
+           
+           if strcmp(model_type,'GEOS')
+               mode = 0.1;
+           elseif strcmp(model_type,'MERRA2')
+               mode = 0;
+           end
+           
             [air.(starfieldNames{i,:}).(profstr).ana.atmfile] = gen_atmos_prof4rt(air.(starfieldNames{i,:}).(profstr)...
-                                                                             ,air.(starfieldNames{i,:}).(profstr).ana,0.1,daystr(4:11),profstr);
+                                                                             ,air.(starfieldNames{i,:}).(profstr).ana,mode,daystr(4:11),profstr);
            %  this is for aircraft (using std atm, model for above aircrat, and aircraft)
            %  this uses interpolated aircrft fields
 %            [air.(starfieldNames{i,:}).(profstr).airAtmNative]= gen_atmos_prof4rt(air.(starfieldNames{i,:}).(profstr)...
@@ -478,7 +543,11 @@ for i=1:nFields
            axis([230 280 0 7]);
            ha=text(231,6.5,daystr(4:11)) ;set(ha,'fontsize',12,'color','k');
            hb=text(270,6.3,'.. C130')    ;set(hb,'fontsize',12,'color','k');
-           hc=text(270,5.8,'- GEOS-5-FP')    ;set(hc,'fontsize',12,'color','k');
+           if strcmp (model_type,'GEOS')
+                hc=text(270,5.8,'- GEOS-5-FP')    ;set(hc,'fontsize',12,'color','k');
+           elseif strcmp(model_type,'MERRA2')
+                hc=text(270,5.8,'- MERRA-2')    ;set(hc,'fontsize',12,'color','k');
+           end
            %legend('C130','MERRA');
            set(gca,'Fontsize',12);
            clear ha hb hc
@@ -538,11 +607,23 @@ for i=1:nFields
            axis([245 280 0 4]);
            ha=text(246,3.8,daystr(4:11))   ;set(ha,'fontsize',12,'color','k');
            hb=text(265,3.7,'.. C130')      ;set(hb,'fontsize',12,'color','k');
-           hc=text(265,3.5,'- GEOS-5-FP')      ;set(hc,'fontsize',12,'color','k');
+           
+           if strcmp(model_type,'GEOS')
+                hc=text(265,3.5,'- GEOS-5-FP')   ;set(hc,'fontsize',12,'color','k');
+           elseif strcmp(model_type,'MERRA2')
+                hc=text(265,3.5,'- MERRA2')      ;set(hc,'fontsize',12,'color','k');
+           end
+           
            hd=text(265,3.3,'o aircraft Cloud flag') ;set(hd,'fontsize',12,'color','k');
-           he=text(265,3.1,'p GEOS-5-FP Cloud flag')    ;set(he,'fontsize',12,'color','k');
-           hd=text(265,2.9,'s cloud below aircraft');set(hd,'fontsize',12,'color','k');
-           he=text(265,2.7,'d cloud above aircraft');set(he,'fontsize',12,'color','k');
+           
+           if strcmp(model_type,'GEOS')
+                he=text(265,3.1,'p GEOS-5-FP Cloud flag')  ;set(he,'fontsize',12,'color','k');
+           elseif strcmp(model_type,'MERRA2')
+                he=text(265,3.1,'p MERRA2 Cloud flag')    ;set(he,'fontsize',12,'color','k');
+           end
+           
+           hf=text(265,2.9,'s cloud below aircraft');set(hf,'fontsize',12,'color','k');
+           hg=text(265,2.7,'d cloud above aircraft');set(hg,'fontsize',12,'color','k');
            %legend('C130','MERRA');
            set(gca,'Fontsize',12);
            %----------------------
@@ -561,7 +642,11 @@ for i=1:nFields
            axis([0.1 1 0 7]);
            ha=text(0.31,6.5,daystr(4:11)) ;set(ha,'fontsize',12,'color','k');
            hb=text(0.85,6.3,'.. C130')    ;set(hb,'fontsize',12,'color','k');
-           hc=text(0.85,5.8,'- GEOS-5-FP')    ;set(hc,'fontsize',12,'color','k');
+           if strcmp(model_type,'GEOS')
+                hc=text(0.85,5.8,'- GEOS-5-FP') ;set(hc,'fontsize',12,'color','k');
+           elseif strcmp(model_type,'MERRA2')
+                hc=text(0.85,5.8,'- MERRA2')    ;set(hc,'fontsize',12,'color','k');
+           end
            %legend('C130','MERRA');
            set(gca,'Fontsize',12);
            clear ha hb hc
@@ -806,14 +891,26 @@ for i=1:nFields
            %% generate atmospheric profiles for RT simulations
            %  this is for aircraft (using std atm, model for above aircrat, and aircraft)
            %  this uses interpolated aircrft fields
+            mode = 1; % C130 native resolution
+           
+           [air.(starfieldNames{i,:}).(profstr).airAtm]           = gen_atmos_prof4rt(air.(starfieldNames{i,:}).(profstr)...
+                                                                            ,air.(starfieldNames{i,:}).(profstr).ana,mode,daystr(4:11),profstr);
+                                                                        
+            mode = 2; % C130 interpolated to MERRA
            [air.(starfieldNames{i,:}).(profstr).airAtmInterp]     = gen_atmos_prof4rt(air.(starfieldNames{i,:}).(profstr)...
-                                                                            ,air.(starfieldNames{i,:}).(profstr).ana,2,daystr(4:11),profstr);
+                                                                            ,air.(starfieldNames{i,:}).(profstr).ana,mode,daystr(4:11),profstr);
           
            %% plot Temp differences
            figure(100);
            plot((dt),(air.(starfieldNames{i,:}).(profstr).ana.zalt_mean/1000),'-o','color',an,...
                 'markerfacecolor',an,'linewidth',0.5,'markersize',4);hold on;
-           xlabel('\DeltaT (GEOS-5-FP-C130) [K]','FontSize',12);
+            
+           if strcmp(model_type,'GEOS')
+                xlabel('\DeltaT (GEOS-5-FP-C130) [K]','FontSize',12);
+           elseif strcmp(model_type,'MERRA2')
+                xlabel('\DeltaT (MERRA2-C130) [K]','FontSize',12);
+           end
+           
            ylabel('Altitude [km]','fontSize',12);
            set(gca,'YTick',[1:10]);set(gca,'YTickLabel',{'1','2','3','4','5','6','7','8','9','10'});
            axis([-10 10 0 7]);
@@ -824,7 +921,13 @@ for i=1:nFields
            figure(111);
            plot((drh),(air.(starfieldNames{i,:}).(profstr).ana.zalt_mean/1000),'-o','color',an,...
                 'markerfacecolor',an,'linewidth',0.5,'markersize',4);hold on;
-           xlabel('\DeltaRH (GEOS-5-FP-C130) [g/kg]','FontSize',12);
+           
+           if strcmp(model_type,'GEOS')
+                xlabel('\DeltaRH (GEOS-5-FP-C130) [g/kg]','FontSize',12);
+           elseif strcmp(model_type,'MERRA2')
+                xlabel('\DeltaRH (MERRA2-C130) [g/kg]',   'FontSize',12);
+           end
+           
            ylabel('Altitude [km]','fontSize',12);
            set(gca,'YTick',[1:10]);set(gca,'YTickLabel',{'1','2','3','4','5','6','7','8','9','10'});
            axis([-0.5 0.5 0 7]);
@@ -835,7 +938,13 @@ for i=1:nFields
            figure(121);
            plot((dmmr),(air.(starfieldNames{i,:}).(profstr).ana.zalt_mean/1000),'-o','color',an,...
                 'markerfacecolor',an,'linewidth',0.5,'markersize',4);hold on;
-           xlabel('\DeltaMMR (GEOS-5-FP-C130) [g/kg]','FontSize',12);
+            
+           if strcmp(model_type,'GEOS')
+                xlabel('\DeltaMMR (GEOS-5-FP-C130) [g/kg]','FontSize',12);
+           elseif strcmp(model_type,'MERRA2')
+                xlabel('\DeltaMMR (MERRA2-C130) [g/kg]',   'FontSize',12);
+           end
+           
            ylabel('Altitude [km]','fontSize',12);
            set(gca,'YTick',[1:10]);set(gca,'YTickLabel',{'1','2','3','4','5','6','7','8','9','10'});
            set(gca,'XTick',[-5:2.5:5]);set(gca,'YTickLabel',{'-5.0','-2.5','0.0','2.5','5.0'});
@@ -881,17 +990,17 @@ for i=1:nFields
         end % end of profiles
         
         %% save figure 10
-        fi=[strcat('F:\ARISE\ArcticCRF\figures\', daystr(4:11),'tempCompare_newprofiles20150930')];
+        fi=[strcat('F:\ARISE\ArcticCRF\figures\', daystr(4:11),'_',model_type,'_','tempCompare_newprofiles20150930')];
         save_fig(10,fi,false);
         close(10);
         
         %% save figure 101
-        fi=[strcat('F:\ARISE\ArcticCRF\figures\', daystr(4:11),'tempCompare_w_cldflag_air_model20150930')];
+        fi=[strcat('F:\ARISE\ArcticCRF\figures\', daystr(4:11),'_',model_type,'_','tempCompare_w_cldflag_air_model20150930')];
         save_fig(101,fi,false);
         close(101);
         
         %% save figure 11
-        fi=[strcat('F:\ARISE\ArcticCRF\figures\', daystr(4:11),'RHCompare_newprofiles20150930')];
+        fi=[strcat('F:\ARISE\ArcticCRF\figures\', daystr(4:11),'_',model_type,'_','RHCompare_newprofiles20150930')];
         save_fig(11,fi,false);
         close(11);
         
@@ -919,7 +1028,7 @@ for i=1:nFields
             h1=text(-9.5,6.5,daystr(4:11))       ;set(h1,'fontsize',12,'color','k');
             h2=text(-9.5,5.8,'over sea-ice')     ;set(h2,'fontsize',12,'color',[0.1 0.9 0.9]);
             h3=text(-9.5,5.5,'over open ocean');set(h3,'fontsize',12,'color',[0.1 0.1 0.9]);
-            fi1=[strcat('F:\ARISE\ArcticCRF\figures\', daystr(4:11),'deltatemp_ana_air')];
+            fi1=[strcat('F:\ARISE\ArcticCRF\figures\', daystr(4:11),'_',model_type,'_','deltatemp_ana_air')];
             save_fig(100,fi1,false);
             close(100);
             
@@ -947,7 +1056,7 @@ for i=1:nFields
             h1=text(-9.5,6.5,daystr(4:11))       ;set(h1,'fontsize',12,'color','k');
             h2=text(-9.5,5.8,'over sea-ice')     ;set(h2,'fontsize',12,'color',[0.1 0.9 0.9]);
             h3=text(-9.5,5.5,'over open ocean');set(h3,'fontsize',12,'color',[0.1 0.1 0.9]);
-            fi1=[strcat('F:\ARISE\ArcticCRF\figures\', daystr(4:11),'deltaRH_ana_air')];
+            fi1=[strcat('F:\ARISE\ArcticCRF\figures\', daystr(4:11),'_',model_type,'_','deltaRH_ana_air')];
             save_fig(111,fi1,false);
             close(111);
             
@@ -975,7 +1084,7 @@ for i=1:nFields
             h1=text(-9.5,6.5,daystr(4:11))       ;set(h1,'fontsize',12,'color','k');
             h2=text(-9.5,5.8,'over sea-ice')     ;set(h2,'fontsize',12,'color',[0.1 0.9 0.9]);
             h3=text(-9.5,5.5,'over open ocean');set(h3,'fontsize',12,'color',[0.1 0.1 0.9]);
-            fi1=[strcat('F:\ARISE\ArcticCRF\figures\', daystr(4:11),'deltaMMR_ana_air')];
+            fi1=[strcat('F:\ARISE\ArcticCRF\figures\', daystr(4:11),'_',model_type,'_','deltaMMR_ana_air')];
             save_fig(121,fi1,false);
             close(121);
             
@@ -1007,7 +1116,7 @@ end         % end number of days
         cldwcm (cldwcm<0) = 0;
         cldicm (cldicm<0) = 0;
         dat2save = [yearm monthm daym profilem lonm latm zm staticPm iceconcm iceconc_stdm windSm windDm Tm Thetam RHm Qm SatVPwaterm SatVPicem cldflagm cldwcm cldicm];
-        fi2sav   = ['C:\Users\msegalro.NDC\Documents\R\ArcticCRE\data\air_atmProfiles_4plotting_created_on_' datestr(now,'yyyy-mm-dd') '.txt'];
+        fi2sav   = ['C:\Users\msegalro.NDC\Documents\R\ArcticCRE\data\air_atmProfiles_4plotting_created_on_' datestr(now,'yyyy-mm-dd') '_' model_type '.txt'];
         save(fi2sav, '-ASCII','dat2save');
                
         %% save ana and interpolated air data for plotting profiles
@@ -1017,7 +1126,7 @@ end         % end number of days
                     omega_mean omega_std qice_mean qice_std qliq_mean qliq_std qwv_mean qwv_std rh_mean rh_std t_mean t_std theta_mean ...
                     winds_mean windd_mean cflag_ana ctype_ana cth_ana cbh_ana ctk_ana cwc_ana lwc_ana iwc_ana cflag_air cwc_air cic_air airTinterp airMMRinterp airRHinterp ...
                     airThetainterp s700_ana s850_ana s925_ana s700_air s850_air s925_air];
-        fi2sav   = ['C:\Users\msegalro.NDC\Documents\R\ArcticCRE\data\ana_and_interp_air_atmProfiles_4plotting_created_on_' datestr(now,'yyyy-mm-dd') '.txt'];
+        fi2sav   = ['C:\Users\msegalro.NDC\Documents\R\ArcticCRE\data\ana_and_interp_air_atmProfiles_4plotting_created_on_' datestr(now,'yyyy-mm-dd') '_' model_type '.txt'];
         save(fi2sav, '-ASCII','dat2save');
         
         
@@ -1150,10 +1259,16 @@ end% days
     ylabel('\theta_{850} - LML [K]','fontsize',12);
     h11=text(8,65,'C130 over sea-ice')  ; set(h11,'fontsize',12,'color',[0.8 0.1 0.9]);
     h22=text(8,61,'C130over open ocean'); set(h22,'fontsize',12,'color',[0.1 0.1 0.8]);
-    h33=text(8,57,'GEOS-FP over sea-ice')  ;set(h33,'fontsize',12,'color',[0.1 0.9 0.5]);
-    h44=text(8,53,'GEOS-FP open ocean');    set(h44,'fontsize',12,'color',[0.8 0.8 0.1]);
     
-    fi2=[strcat('F:\ARISE\ArcticCRF\figures\',label_str{:,1},'_',label_str{:,end},'LTScompareGEOS_FP_iceconc15')];
+    if strcmp(model_type,'GEOS')
+            h33=text(8,57,'GEOS-FP over sea-ice')  ;set(h33,'fontsize',12,'color',[0.1 0.9 0.5]);
+            h44=text(8,53,'GEOS-FP open ocean');    set(h44,'fontsize',12,'color',[0.8 0.8 0.1]);
+    elseif strcmp(model_type,'MERRA2')
+            h33=text(8,57,'MERRA2 over sea-ice')  ;set(h33,'fontsize',12,'color',[0.1 0.9 0.5]);
+            h44=text(8,53,'MERRA2 open ocean');    set(h44,'fontsize',12,'color',[0.8 0.8 0.1]);
+    end
+    
+    fi2=[strcat('F:\ARISE\ArcticCRF\figures\',label_str{:,1},'_',label_str{:,end},'LTScompare' , model_type, 'iceconc15')];
     save_fig(13,fi2,false);
     close(13);
     
@@ -1187,15 +1302,20 @@ end% days
     ylabel('\theta_{925} - LML [K]','fontsize',12);
     h11=text(8,65,'C130 over sea-ice')  ; set(h11,'fontsize',12,'color',[0.8 0.1 0.9]);
     h22=text(8,61,'C130over open ocean'); set(h22,'fontsize',12,'color',[0.1 0.1 0.8]);
-    h33=text(8,57,'GEOS-FP over sea-ice')  ;set(h33,'fontsize',12,'color',[0.1 0.9 0.5]);
-    h44=text(8,53,'GEOS-FP open ocean');    set(h44,'fontsize',12,'color',[0.8 0.8 0.1]);
+    if strcmp(model_type,'GEOS')
+        h33=text(8,57,'GEOS-FP over sea-ice')  ;set(h33,'fontsize',12,'color',[0.1 0.9 0.5]);
+        h44=text(8,53,'GEOS-FP open ocean');    set(h44,'fontsize',12,'color',[0.8 0.8 0.1]);
+    elseif strcmp(model_type,'MERRA2')
+        h33=text(8,57,'MERRA2 over sea-ice')  ;set(h33,'fontsize',12,'color',[0.1 0.9 0.5]);
+        h44=text(8,53,'MERRA2 open ocean');    set(h44,'fontsize',12,'color',[0.8 0.8 0.1]);
+    end
     
-    fi2=[strcat('F:\ARISE\ArcticCRF\figures\',label_str{:,1},'_',label_str{:,end},'LLSScompare_GEOS_FP_iceconc15')];
+    fi2=[strcat('F:\ARISE\ArcticCRF\figures\',label_str{:,1},'_',label_str{:,end},'LLSScompare_' , model_type, 'iceconc15')];
     save_fig(14,fi2,false);
     close(14);
     
 %% save processed air struct
-file2save=[strcat(arisedir,filename,'_w_anacompare_w_consolidatedcloudsAir_andModel', datestr(now,'yyyy-mm-dd'), '.mat')];
+file2save=[strcat(arisedir,filename,'_w_anacompare_w_consolidatedcloudsAir_andModel', datestr(now,'yyyy-mm-dd'), '_', model_type, '.mat')];
 save(file2save,'-struct','air');
         
 

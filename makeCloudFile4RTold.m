@@ -41,13 +41,15 @@
 %% load data base
 
     wdir = 'F:\ARISE\C-130data\Met\SeaIceProfiles\';
-    wfile= 'ARISEairprocessed_with_insitu_withWVparams20150921_w_anacompare_w_consolidatedcloudsAir_andModel2015-10-13.mat';
+    wfile= 'ARISEairprocessed_with_insitu_withWVparams20150921_w_anacompare_w_consolidatedcloudsAir_andModel2015-10-26.mat';
     dat    = load([wdir wfile]);
     nFields= sum(~structfun(@isempty,dat));
     airfieldNames= fieldnames(dat);
     
-    clist = {'air_wc_10','air_wc_15','air_wc_20','air_wc_15','air_ic_20','air_ic_30',...
-             'ana_wc_10','ana_wc_15','ana_wc_20','ana_ic_15','ana_ic_20','ana_ic_30'};
+    clist = {'air_wc_10','air_wc_15','air_wc_20','air_ic_15','air_ic_20','air_ic_30',...
+             'mod_wc_10','mod_wc_15','mod_wc_20','mod_ic_15','mod_ic_20','mod_ic_30',...
+             'air_mx_1' ,'air_mx_2', 'air_mx_3',...
+             'mod_mx_1' ,'mod_mx_2', 'mod_mx_3'};
          
          
 %% loop over all options
@@ -56,19 +58,21 @@
             
             % find case options
             
-            op = strsplit(clist{:,1},'_');%op{:,1}
+            op = strsplit(clist{:,i},'_');%op{:,1}
             
             
             %% loop over data file for each option
                     k = 0;
                     for ii=1:nFields
+                        
+                            daystr=airfieldNames{ii,:};
                             k = k+1;
                             doy = datestr2doy(daystr(4:11),'yyyymmdd');
                             % Extract only the "profnum" fields
                             names  = fieldnames(dat.(airfieldNames{ii,:}));
                             pnames = names(~cellfun('isempty', strfind(names, 'profnum')));
                             nProfiles = length(pnames);
-                            daystr=airfieldNames{ii,:};
+                            
                             
                             if nProfiles>0
                                 
@@ -78,8 +82,8 @@
                                             
                                             % generate cloud profile
                                             
-                                              % genModCloudProf(prof,dprof,allprof,daystr,doy,ctype,cReff);
-                                                genModCloudProf(dat.(daystr).(profstr),j,k,daystr(4:11),num2str(doy),op{1},op{2},op{3});
+                                              % genModCloudProf(prof,dprof,allprof,daystr,doy,datsource,ctype,cReff);
+                                                genModCloudProf(dat.(daystr).(profstr),j,k,daystr(4:11),num2str(doy),op{1},op{2},str2double(op{3}));
                                             
                                     end % nProfiles
                                 
