@@ -44,6 +44,8 @@
 % MS, based on gen_atmos_rt. this version is for latest FP reanalysis data
 % MS, 2015-10-12, added mode==2 to diff between native and interpolated
 %                 C130 fields, added mode=0.5, for FP product in filename
+% MS, 2015-11-12, fixed bugs in building C130 and C130 atmospheric profile
+%                 changes RT atm levels to model (i.e., 42 pressure levels)
 % -------------------------------------------------------------------------
 
 %% Start of function
@@ -64,10 +66,10 @@ if mode==1
     air.airnd=TP2numd(air.t,air.p,'air');
 elseif mode==2
     % interpolated airborne data
-    air.t = air.airTinterp;
-    air.p = ana.plev;
-    air.rh= air.airRHinterp;
-    air.z = ana.zalt_mean;
+    air.t  = flipud(air.airTinterp);
+    air.p  = flipud(ana.plev);
+    air.rh = flipud(air.airRHinterp);
+    air.zz = flipud(ana.zalt_mean);
     air.h2ond=magnus(100*air.rh,air.t);% rh needs to be in %
     air.airnd=TP2numd(air.t,air.p,'air');
 end
@@ -148,161 +150,179 @@ mode_ = mode;
 mode = round(mode_);
 
 if mode==0
-    % assign altitude according to reanalysis
-    % only up to 30km - for Tinterp
-    % only up to 15km - for T and P interp
-    intind = interp1(ana.z,[1:length(ana.z)],15000,'nearest');
-    z1=ana.z(intind:end);%ana.z(1):-100:0;%1800:-200:1000;
-    zind = interp1(std.z,[1:length(std.z)],max(z1),'nearest');
-    if z1(end)~=0 z1 = [z1; 0.0]; end
-    Z=[std.z(1:zind-1);z1];
-    % interp reanalysis
-    [ana.zz,ana.i]=sort(ana.z);
-    [ana.zz,ana.ia]=unique(ana.zz);
-    ana.i=ana.i(ana.ia);
+        
+            % complete with std atm variables
+            zind = interp1(std.z,[1:length(std.z)],max(ana.z),'nearest');
+            Z= [std.z(1:zind-1)    ;ana.z];
+            Tz=[std.t(1:zind-1)    ;ana.t];
+            Pz=[std.p(1:zind-1)    ;ana.p];
+            Hz=[std.h2ond(1:zind-1);ana.h2ond];
+            Az=[std.airnd(1:zind-1);ana.airnd];
+            Oz=[std.o3nd(1:zind-1) ;ana.o3nd];
 
-    ana.Tz=interp1(ana.z,ana.t,Z,'linear','extrap');
-    ana.Pz=interp1([ana.z;120000],[ana.p; 2e-10],Z,'linear','extrap');
-    ana.Hz=interp1(ana.z,ana.h2ond,Z,'linear','extrap');
-    ana.Az=interp1(ana.z,ana.airnd,Z,'linear','extrap');
-    ana.Oz=interp1(ana.z,ana.o3nd,Z,'linear','extrap');
-    % ana.Oz=interp1(ana.zz,ana.o3nd(ana.i),Z,'linear','extrap');
+            % interp values to zero altitude
+            Z  = [Z;0];     
+            Tz = [Tz; 0];     Tz(end)=interp1(Z(end-1:-1:end-4),Tz(end-1:-1:end-4),Z(end),'linear','extrap');
+            Pz = [Pz; 0];     Pz(end)=interp1(Z(end-1:-1:end-4),Pz(end-1:-1:end-4),Z(end),'linear','extrap');
+            Hz = [Hz; 0];     Hz(end)=interp1(Z(end-1:-1:end-4),Hz(end-1:-1:end-4),Z(end),'linear','extrap');
+            Az = [Az; 0];     Az(end)=interp1(Z(end-1:-1:end-4),Az(end-1:-1:end-4),Z(end),'linear','extrap');
+            Oz = [Oz; 0];     Oz(end)=interp1(Z(end-1:-1:end-4),Oz(end-1:-1:end-4),Z(end),'linear','extrap');
+
+            % assign to atm
+
+            atm.T   = Tz;
+            atm.P   = Pz;
+            atm.H   = Hz;
+            atm.air = Az;
+            atm.o3  = Oz;
+
+
+            if     mode_==0
+                 modestr = 'MERRA2';
+            elseif mode_==0.1
+                 modestr = 'GEOS_FP';
+            end
     
-     if     mode_==0
-         modestr = 'MERRA2';
-    elseif mode_==0.1
-         modestr = 'GEOS_FP';
-    end
-   
     
-else
-    % assign altitude according to airborne
-    z1=max(air.z):-50:0;%1800:-200:1000;
-    zind = interp1(std.z,[1:length(std.z)],max(air.z),'nearest');
-    Z=[std.z(1:zind-1);z1'];
-    % interp air
-    [air.zz,air.i]=sort(air.z);
-    [air.zz,air.ia]=unique(air.zz);
-    air.i=air.i(air.ia);
+elseif mode==1 % C130 original
     
-    % need to interp the last (lowest pressure by ana/air)
-    air.Tz=interp1(air.zz,air.t(air.i),Z);     air.Tz(end)=interp1(air.zz(1:3),air.t(1:3),Z(end),    'linear','extrap');
-    air.Pz=interp1(air.zz,air.p(air.i),Z);     air.Pz(end)=interp1(air.zz(1:3),air.p(1:3),Z(end),    'linear','extrap');
-    air.Hz=interp1(air.zz,air.h2ond(air.i),Z); air.Hz(end)=interp1(air.zz(1:3),air.h2ond(1:3),Z(end),'linear','extrap');
-    air.Az=interp1(air.zz,air.airnd(air.i),Z); air.Az(end)=interp1(air.zz(1:3),air.airnd(1:3),Z(end),'linear','extrap');
+    % assign altitude according to airborne, analysis and std atm
     
-    % interp reanalysis according to airborne
-    ana.Tz=interp1(ana.z,ana.t,Z);
-    ana.Pz=interp1(ana.z,ana.p,Z);
-    ana.Hz=interp1(ana.z,ana.h2ond,Z);
-    ana.Az=interp1(ana.z,ana.airnd,Z);
-    ana.Oz=interp1(ana.z,ana.o3nd,Z);
+            z1=max(air.z):-50:min(air.z);
+            z1=z1';
+            % if z1(end)~=min(air.z) z1=[z1' ;min(air.z)]; end
+
+            % sort air levels to avoid duplicates
+            [air.zz,air.i]=sort(air.z);
+            [air.zz,air.ia]=unique(air.zz);
+            air.i=air.i(air.ia);
+            air.zz = flipud(air.zz);
+            air.i  = flipud(air.i);
+
+            % select unique values and interpolate to z1
+            t     = interp1(air.zz,air.t(air.i),z1);     
+            p     = interp1(air.zz,air.p(air.i),z1);
+            h2ond = interp1(air.zz,air.h2ond(air.i),z1);
+            airnd = interp1(air.zz,air.airnd(air.i),z1);
+
+            % fill-in missing air values with model
+
+            if sum(p==0)>10
+                p_     = interp1(ana.z,ana.p,z1);     p=p_;
+                h2ond_ = interp1(ana.z,ana.h2ond,z1); h2ond=h2ond_;
+                airnd_ = interp1(ana.z,ana.airnd,z1); airnd=airnd_;
+            end
+
+            % o3
+
+                o3nd   = interp1(ana.z,ana.o3nd,z1);
+
+            % complete missing values with model values
+            zind = interp1(ana.z,[1:length(ana.z)],max(z1),'nearest');
+            Z1= [ana.z(1:zind-1)    ;z1];
+            Tz1=[ana.t(1:zind-1)    ;t];
+            Pz1=[ana.p(1:zind-1)    ;p];
+            Hz1=[ana.h2ond(1:zind-1);h2ond];
+            Az1=[ana.airnd(1:zind-1);airnd];
+            Oz1=[ana.o3nd(1:zind-1); o3nd];
+
+            % complete rest with std atm
+            zind = interp1(std.z,[1:length(std.z)],max(Z1),'nearest');
+            Z= [std.z(1:zind-1)    ;Z1];
+            Tz=[std.t(1:zind-1)    ;Tz1];
+            Pz=[std.p(1:zind-1)    ;Pz1];
+            Hz=[std.h2ond(1:zind-1);Hz1];
+            Az=[std.airnd(1:zind-1);Az1];
+            Oz=[std.o3nd(1:zind-1) ;Oz1];
+
+            % interp values to zero altitude
+            Z  = [Z;0];     
+            Tz = [Tz; 0];     Tz(end)=interp1(Z(end-1:-1:end-4),Tz(end-1:-1:end-4),Z(end),'linear','extrap');
+            Pz = [Pz; 0];     Pz(end)=interp1(Z(end-1:-1:end-4),Pz(end-1:-1:end-4),Z(end),'linear','extrap');
+            Hz = [Hz; 0];     Hz(end)=interp1(Z(end-1:-1:end-4),Hz(end-1:-1:end-4),Z(end),'linear','extrap');
+            Az = [Az; 0];     Az(end)=interp1(Z(end-1:-1:end-4),Az(end-1:-1:end-4),Z(end),'linear','extrap');
+            Oz = [Oz; 0];     Oz(end)=interp1(Z(end-1:-1:end-4),Oz(end-1:-1:end-4),Z(end),'linear','extrap');
+
+            % assign to atm
+
+            atm.T   = Tz;
+            atm.P   = Pz;
+            atm.H   = Hz;
+            atm.air = Az;
+            atm.o3  = Oz;
+
+
+            modestr = 'C130';
+
+elseif mode==2 %C130-interp
     
-    if     mode==1
-        modestr = 'C130';
-    elseif mode==2
-        modestr = 'C130interp';
-    end
-    
-    % test figure;
-%     figure;
-%     plot(ana.z,ana.airnd,'ob');hold on;
-%     plot(Z,ana.Az,'.r')       ;hold on;
-%     plot(std.z,std.airnd,'.g');hold on;
-%     legend('ana-original','ana-interp','std');
+            % fill-in missing air values with model values
+
+            if sum(isnan(air.rh))>30
+                air.h2ond = ana.h2ond;
+            end
+
+            % o3
+
+            air.o3nd   = ana.o3nd;
+
+            % replace interpolated aircraft NaN with model values
+            ind = max(find(isnan(air.t)));
+
+            air.t(1:ind)     = ana.t(1:ind);
+            air.h2ond(1:ind) = ana.h2ond(1:ind);
+            air.airnd(1:ind) = ana.airnd(1:ind);
+
+            % complete with std atm variables
+            zind = interp1(std.z,[1:length(std.z)],max(air.zz),'nearest');
+            Z= [std.z(1:zind-1)    ;air.zz];
+            Tz=[std.t(1:zind-1)    ;air.t];
+            Pz=[std.p(1:zind-1)    ;air.p];
+            Hz=[std.h2ond(1:zind-1);air.h2ond];
+            Az=[std.airnd(1:zind-1);air.airnd];
+            Oz=[std.o3nd(1:zind-1) ;air.o3nd];
+
+            % interp values to zero altitude
+            Z  = [Z;0];     
+            Tz = [Tz; 0];     Tz(end)=interp1(Z(end-1:-1:end-4),Tz(end-1:-1:end-4),Z(end),'linear','extrap');
+            Pz = [Pz; 0];     Pz(end)=interp1(Z(end-1:-1:end-4),Pz(end-1:-1:end-4),Z(end),'linear','extrap');
+            Hz = [Hz; 0];     Hz(end)=interp1(Z(end-1:-1:end-4),Hz(end-1:-1:end-4),Z(end),'linear','extrap');
+            Az = [Az; 0];     Az(end)=interp1(Z(end-1:-1:end-4),Az(end-1:-1:end-4),Z(end),'linear','extrap');
+            Oz = [Oz; 0];     Oz(end)=interp1(Z(end-1:-1:end-4),Oz(end-1:-1:end-4),Z(end),'linear','extrap');
+
+            % assign to atm
+
+            atm.T   = Tz;
+            atm.P   = Pz;
+            atm.H   = Hz;
+            atm.air = Az;
+            atm.o3  = Oz;
+
+
+            modestr = 'C130interp';
     
 end
 
-% interp std
-std.Tz=interp1(std.z,std.t,Z);
-std.Pz=interp1(std.z,std.p,Z);
-std.Hz=interp1(std.z,std.h2ond,Z);
-std.Az=interp1(std.z,std.airnd,Z);
-std.Oz=interp1(std.z,std.o3nd,Z);
+    % interp std to current Z levels
+    std.Tz=interp1(std.z,std.t,Z);
+    std.Pz=interp1(std.z,std.p,Z);
+    std.Hz=interp1(std.z,std.h2ond,Z);
+    std.Az=interp1(std.z,std.airnd,Z);
+    std.Oz=interp1(std.z,std.o3nd,Z);
 
-% assign temperature,preesure, water vapor, air, o3 density
-if mode==0
-    
-    % temp
-    atm.T=ana.Tz;
-%     it2=find(isnan(atm.T));
-%     atm.T(it2)=std.Tz(it2);
-    atm.T(1:zind)=std.Tz(1:zind);
-    
-    % pres
-    atm.P=ana.Pz;
-%     ip2=find(isnan(atm.P));
-%     atm.P(ip2)=std.Pz(ip2);
-    atm.P(1:zind)=std.Pz(1:zind);
-%     if sum(diff(atm.P)<0)>1
-%         atm.P = smooth(atm.P);
-%     end
-    
-    % water vapor
-    atm.H=ana.Hz;
-%     ih2=find(isnan(atm.H));
-%     atm.H(ih2)=std.Hz(ih2);
-    atm.H(1:zind)=std.Hz(1:zind);
-    
-    % air density
-    atm.air=ana.Az;
-%     ia2=find(isnan(atm.air));
-%     atm.air(ia2)=std.Az(ia2);
-    atm.air(1:zind)=std.Az(1:zind);
-    
-    % o3 density
-    atm.o3=ana.Oz;
-%     io2=find(isnan(atm.o3));
-%     atm.o3(io2)=std.Oz(io2);
-    atm.o3(1:zind)=std.Oz(1:zind);
-    
-else
-    
-    % temp
-    atm.T=air.Tz; 
-    it1=find(isnan(atm.T));
-    atm.T(it1)=ana.Tz(it1);
-    it2=find(isnan(atm.T));
-    atm.T(it2)=std.Tz(it2);
-    
-    % pres
-    atm.P=air.Pz; 
-    ip1=find(isnan(atm.P));
-    atm.P(ip1)=ana.Pz(ip1);
-    ip2=find(isnan(atm.P));
-    atm.P(ip2)=std.Pz(ip2);
-    
-    % water vapor
-    atm.H=air.Hz; 
-    ih1=find(isnan(atm.H));
-    atm.H(ih1)=ana.Hz(ih1);
-    ih2=find(isnan(atm.H));
-    atm.H(ih2)=std.Hz(ih2);
-    
-    % air density
-    atm.air=air.Az; 
-    ia1=find(isnan(atm.air));
-    atm.air(ia1)=ana.Az(ia1);
-    ia2=find(isnan(atm.air));
-    atm.air(ia2)=std.Az(ia2);
-    
-    % o3 density
-    atm.o3=ana.Oz; 
-    io2=find(isnan(atm.o3));
-    atm.o3(io2)=std.Oz(io2);
-    
-end
 
-atm.Z=Z./1000.0;
+    % convert to km
+    atm.Z=Z./1000.0;
 
-%complete the rest
+% complete missing variables from std atm
+
 %atm.ratio=atm.P./std.Pz;
 atm.air=gas_law(atm.P,atm.T); %interp1(std.z,std.air,Z).*atm.ratio;
 atm.air_int=interp1(std.z,std.airnd,Z);
 atm.ratio=atm.air./atm.air_int;
 %atm.ratio2=atm.air2./atm.air_int;
 %atm.o3=interp1(std.z,std.o3,Z).*atm.ratio;
-atm.o2=interp1(std.z,std.o2nd,Z).*atm.ratio;
+atm.o2 =interp1(std.z,std.o2nd,Z).*atm.ratio;
 atm.co2=interp1(std.z,std.co2nd,Z).*atm.ratio;
 atm.no2=interp1(std.z,std.no2nd,Z).*atm.ratio;
 

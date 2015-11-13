@@ -48,6 +48,8 @@
 % MS, 2015-10-26, added interpolated cloud parameters into saved struct
 % MS, 2015-11-02, added option to read either GEOS-FP or MERRA2
 %                 added option to handle profiles with no clouds for model
+% MS, 2015-11-11, fixed bug having NaN's on some of model LML variables
+% MS, 2015-11-12, fixed generation of atm profile from aircraft data
 % -------------------------------------------------------------------------
 %% function routine
 function air_model_combineNp_levels(model_type)
