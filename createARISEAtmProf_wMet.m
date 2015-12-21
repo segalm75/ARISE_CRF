@@ -48,6 +48,8 @@
 %                 change version set to v1.1 due to probe data addition
 % MS: 2015-09-18, added entire CDP range to be saved
 % MS: 2015-09-21, added WindS, WindD, and staticP fields to be saved
+% MS: 2015-12-21, made wvdir data obsolete since final archive have been
+%                 submitted
 % -------------------------------------------------------------------------
 %% function routine
 function out = createARISEAtmProf_wMet
@@ -115,7 +117,9 @@ airinfile = getfullname__('arise-C130-Hskping_c130_*.ict','F:','Select a met ict
         
         % replace ict met data with existing .csv water vapor data
         wvfname = strcat(wvdir,'Arise_Waterparams_',dates(i),'.csv');
-        if exist(wvfname{:},'file')
+        if 1==2; % exist(wvfname{:},'file')
+            
+            % use only .ict file (latest archive from Dec-7-2015)
             
             tmp =importdata(wvfname{:});   % water vapor data 
             timeutc = (tmp.data(:,1)/86400)*24;

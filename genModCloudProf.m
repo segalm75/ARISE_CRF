@@ -47,6 +47,8 @@
 % Modified: 2015-10-26, MS: added function capabilities to accept more
 %                           options
 % Modified: 2015-11-11, MS: changed cloud bot to 0 at LML
+% Modified: 2015-11-13, MS: chnaged Reff definition to 10/15 etc.
+% Modified: 2015-11-23, MS: changed Reff definition back to 10/10 etc.
 % ---------------------------------------------------------------------------
 %% function routine
 function [c] = genModCloudProf(model,prof,dprof,allprof,daystr,doy,datsource,atmsource,ctype,cReff)
@@ -157,8 +159,8 @@ if c.cldnum>0
     c.cldbot   = NaN(c.cldnum,1);
 
     c.cldthick = prof.ana.zalt_mean(c.cldend) - prof.ana.zalt_mean(c.cldstart);
-    c.cldtop   = prof.ana.zalt_mean(c.cldend);
-    c.cldbot   = prof.ana.zalt_mean(c.cldstart);
+    c.cldtop   = double(prof.ana.zalt_mean(c.cldend));
+    c.cldbot   = double(prof.ana.zalt_mean(c.cldstart));
     
     % change cloud bot from LML to 0
     
@@ -168,15 +170,15 @@ if c.cldnum>0
     
     % check if ctop & cbot are in same layer
     
-    levels = diff(prof.ana.zalt_mean);
+    levels = double(diff(prof.ana.zalt_mean));
     
     for kk=1:c.cldnum
         
         if c.cldtop(kk)==c.cldbot(kk)
             % compute again accoding to layer thickness
-            c.cldbot(kk)   = c.cldbot(kk);
-            c.cldtop(kk)   = c.cldbot(kk) + levels(c.cldstart(kk)-1);
-            c.cldthick(kk) = c.cldtop(kk) - c.cldbot(kk); % or: levels(c.cldstart(kk)-1)
+            c.cldbot(kk)   = double(c.cldbot(kk));
+            c.cldtop(kk)   = double(c.cldbot(kk) + levels(c.cldstart(kk)-1));
+            c.cldthick(kk) = double(c.cldtop(kk) - c.cldbot(kk)); % or: levels(c.cldstart(kk)-1)
         end
         
     end
@@ -192,20 +194,55 @@ if c.cldnum>0
                     c.cldreffWC = NaN(c.cldnum,1);
                     c.cldreffIC = NaN(c.cldnum,1);
     end
-
-    for i=1:c.cldnum
-        if     cReff==0  && (strcmp(ctype,'wc') || strcmp(ctype,'ic') || strcmp(ctype,'iawc'))
-                    c.cldreff(i) = nanmean(prof.cld.cldreff);
-        elseif cReff>=10 && (strcmp(ctype,'wc') || strcmp(ctype,'ic') || strcmp(ctype,'iawc'))
-                    c.cldreff(i) = cReff;
-        elseif cReff==0  && (strcmp(ctype,'mx') || strcmp(ctype,'mxflp'))
-                    c.cldreffWC(i) = nanmean(prof.cld.cldreff);
-                    c.cldreffIC(i) = nanmean(prof.cld.cldreff);
-        elseif cReff>=10 && (strcmp(ctype,'mx') || strcmp(ctype,'mxflp'))
-                    c.cldreffWC(i) = cReff;
-                    c.cldreffIC(i) = cReff;
+    
+    % this is for 10/15/20 for both ice and liquid
+    
+        for i=1:c.cldnum
+            if     cReff==0  && (strcmp(ctype,'wc') || strcmp(ctype,'ic') || strcmp(ctype,'iawc'))
+                        c.cldreff(i) = nanmean(prof.cld.cldreff);
+            elseif cReff>=10 && (strcmp(ctype,'wc') || strcmp(ctype,'ic') || strcmp(ctype,'iawc'))
+                        c.cldreff(i) = cReff;
+            elseif cReff==0  && (strcmp(ctype,'mx') || strcmp(ctype,'mxflp'))
+                        c.cldreffWC(i) = nanmean(prof.cld.cldreff);
+                        c.cldreffIC(i) = nanmean(prof.cld.cldreff);
+            elseif cReff>=10 && (strcmp(ctype,'mx') || strcmp(ctype,'mxflp'))
+                        c.cldreffWC(i) = cReff;
+                        c.cldreffIC(i) = cReff;
+            end
         end
-    end
+    
+    % this is for 10/15, 15/20, 20/30 Reff combinations for liquid/ice
+    
+%     for i=1:c.cldnum
+%         if     cReff==0  && (strcmp(ctype,'wc') || strcmp(ctype,'ic') || strcmp(ctype,'iawc'))
+%                     c.cldreff(i) = nanmean(prof.cld.cldreff);
+%         elseif cReff==0  && (strcmp(ctype,'mx') || strcmp(ctype,'mxflp'))
+%                     c.cldreffWC(i) = nanmean(prof.cld.cldreff);
+%                     c.cldreffIC(i) = nanmean(prof.cld.cldreff);
+%         elseif cReff==10 && (strcmp(ctype,'wc') || strcmp(ctype,'iawc'))
+%                     c.cldreff(i) = cReff;
+%         elseif cReff==10 && (strcmp(ctype,'ic'))
+%                     c.cldreff(i) = 15;
+%         elseif cReff==10 && (strcmp(ctype,'mx') || strcmp(ctype,'mxflp'))
+%                     c.cldreffWC(i) = cReff;
+%                     c.cldreffIC(i) = 15;
+%         elseif cReff==15 && (strcmp(ctype,'wc') || strcmp(ctype,'iawc'))
+%                     c.cldreff(i) = cReff;
+%         elseif cReff==15 && (strcmp(ctype,'ic'))
+%                     c.cldreff(i) = 20;
+%         elseif cReff==15 && (strcmp(ctype,'mx') || strcmp(ctype,'mxflp'))
+%                     c.cldreffWC(i) = cReff;
+%                     c.cldreffIC(i) = 20;
+%         elseif cReff==20 && (strcmp(ctype,'wc') || strcmp(ctype,'iawc'))
+%                     c.cldreff(i) = cReff;
+%         elseif cReff==20 && (strcmp(ctype,'ic'))
+%                     c.cldreff(i) = 30;
+%         elseif cReff==20 && (strcmp(ctype,'mx') || strcmp(ctype,'mxflp'))
+%                     c.cldreffWC(i) = cReff;
+%                     c.cldreffIC(i) = 30;
+%         end
+%     end
+
 
 
 %% cloud phase and cloud water content

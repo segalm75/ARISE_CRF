@@ -50,7 +50,8 @@
     % wfile= 'ARISEairprocessed_with_insitu_withWVparams20150921_w_anacompare_w_consolidatedcloudsAir_andModel2015-10-26.mat';% this is for GOES-FP
     % ARISEairprocessed_with_insitu_withWVparams20150921_w_anacompare_w_consolidatedcloudsAir_andModel2015-11-03_GEOS.mat
     % ARISEairprocessed_with_insitu_withWVparams20150921_w_anacompare_w_consolidatedcloudsAir_andModel2015-11-02_MERRA2.mat
-    wfile = 'ARISEairprocessed_with_insitu_withWVparams20150921_w_anacompare_w_consolidatedcloudsAir_andModel2015-11-02_MERRA2.mat';
+    % wfile = 'ARISEairprocessed_with_insitu_withWVparams20150921_w_anacompare_w_consolidatedcloudsAir_andModel2015-11-02_MERRA2.mat';
+    wfile = 'ARISEairprocessed_with_insitu_withWVparams20150921_w_anacompare_w_consolidatedcloudsAir_andModel2015-11-12_MERRA2.mat';
     dat    = load([wdir wfile]);
     nFields= sum(~structfun(@isempty,dat));
     airfieldNames= fieldnames(dat);
@@ -84,7 +85,7 @@
 % atm profiles does not exist for first half of campaign
 % for option 2, need to interpolate Reff into model level
 
-    for i=[11:22 29:34];%1:length(clist)
+    for i=[5:length(clist)];%[1:2 11:22 29:34];%1:length(clist)
             
             % find case options
             
