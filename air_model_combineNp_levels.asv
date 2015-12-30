@@ -50,7 +50,6 @@
 %                 added option to handle profiles with no clouds for model
 % MS, 2015-11-11, fixed bug having NaN's on some of model LML variables
 % MS, 2015-11-12, fixed generation of atm profile from aircraft data
-% MS, 2015-12-29, fixed saving of aircraft cloud params
 % -------------------------------------------------------------------------
 %% function routine
 function air_model_combineNp_levels(model_type)
@@ -103,7 +102,6 @@ k=0;
         cldflagm    = [];
         cldwcm      = [];
         cldicm      = [];
-        surfTm      = [];
 
         % initialize vars for saving model data for plotting
         date = [];
@@ -727,7 +725,7 @@ for i=1:nFields
                 drh = NaN(length(air.(starfieldNames{i,:}).(profstr).ana.zalt_mean),1);
            end
            
-           % interp airT/airMMR/airRH to LML
+           % interp airT/airMMR/airRH to reana levels, including LML
            if sum(~isNaN(air.(starfieldNames{i,:}).(profstr).airTinterp))>2
                 air.(starfieldNames{i,:}).(profstr).airTinterp(1) = ...
                        interp1(air.(starfieldNames{i,:}).(profstr).ana.zalt_mean(2:4),air.(starfieldNames{i,:}).(profstr).airTinterp(2:4),...
@@ -743,8 +741,8 @@ for i=1:nFields
                 dt = air.(starfieldNames{i,:}).(profstr).ana.T_mean - air.(starfieldNames{i,:}).(profstr).airTinterp;
                 
            else
-               %air.(starfieldNames{i,:}).(profstr).airTinterp     = (NaN(1,length(air.(starfieldNames{i,:}).(profstr).ana.zalt_mean)))';
-               %air.(starfieldNames{i,:}).(profstr).airThetainterp = (NaN(1,length(air.(starfieldNames{i,:}).(profstr).ana.zalt_mean)))';
+               air.(starfieldNames{i,:}).(profstr).airTinterp     = (NaN(1,length(air.(starfieldNames{i,:}).(profstr).ana.zalt_mean)))';
+               air.(starfieldNames{i,:}).(profstr).airThetainterp = (NaN(1,length(air.(starfieldNames{i,:}).(profstr).ana.zalt_mean)))';
            end
            
            airTinterp     = [airTinterp;     air.(starfieldNames{i,:}).(profstr).airTinterp(1:p)];
@@ -982,8 +980,6 @@ for i=1:nFields
             cldwcm        = [cldwcm;      air.(starfieldNames{i,:}).(profstr).LWC1_gm3];
             cldicm        = [cldicm;      air.(starfieldNames{i,:}).(profstr).TWC_gm3 - ...
                                           abs(air.(starfieldNames{i,:}).(profstr).LWC1_gm3)];
-            %!!! uncomment when final re-run
-            %surfTm        = [surfTm;      air.(starfieldNames{i,:}).(profstr).IRsurfT];
 
             % add theta
             theta=temp2theta((air.(starfieldNames{i,:}).(profstr).Static_AirT+273),...

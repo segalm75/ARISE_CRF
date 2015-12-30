@@ -1,6 +1,6 @@
 %% Details of the function:
 %  NAME:
-% createARISEAtmProf_wMet
+% createARISEAtmProfFinalArchive
 %----------------------------------
 % PURPOSE:
 %  - create profiles from ARISE flights-vertical legs
@@ -11,12 +11,10 @@
 %  - of cloud profile effect
 %
 % CALLING SEQUENCE:
-%  out = createARISEAtmProf_wMet
+%  out = createARISEAtmProfFinalArchive
 %
 % INPUT:
 %  - arise-C130-Hskping_c130_20140830_RA_Preliminary.ict air data
-%  - Arise-Waterparams-13Sept2014.csv complimentary water vapor air data
-%    this is for preliminary arise data where no final met data available
 %  - 20140901Probes.csv probes .csv files
 % 
 % 
@@ -32,12 +30,12 @@
 % NEEDED FILES/INPUT:
 % 
 % - arise-C130-Hskping_c130_20140830_RA_Preliminary.ict air data
-% - Arise-Waterparams-13Sept2014.csv complimentary water vapor air data
-% - 20140901Probes.csv probes .csv files
+% - arise-probes.csv files generated from .ict files
+% - arise star.mat files
 %
 %
 % EXAMPLE:
-%  - out = createARISEAtmProf_wMET
+%  - out = createARISEAtmProfFinalArchive
 %
 %
 % MODIFICATION HISTORY:
@@ -49,9 +47,11 @@
 %                 change version set to v1.1 due to probe data addition
 % MS: 2015-09-18, added entire CDP range to be saved
 % MS: 2015-09-21, added WindS, WindD, and staticP fields to be saved
+% MS: 2015-12-22, modified reateARISEAtmProf_wMet to assimilate latest
+%                 archive data
 % -------------------------------------------------------------------------
 %% function routine
-function out = createARISEAtmProf_wMet
+function out = createARISEAtmProfFinalArchive
 version_set('1.1');
 startup_plotting;
 %compare = 'false'; % defualt is false
@@ -66,10 +66,10 @@ airinfile = getfullname__('arise-C130-Hskping_c130_*.ict','F:','Select a met ict
  
  % complimentary water vapor air data in .csv format
  % under F:\ARISE\C-130data\Met\NewArchiveData
- wvinfile = getfullname__('Arise_Waterparams*.csv','F:','Select water vapor .csv files directory');
-[wvdir, fname, ext] = fileparts(wvinfile);
- wvdir = [wvdir, filesep];
- wv_files = dir([wvdir,'Arise-Waterparams*.csv']);
+%  wvinfile = getfullname__('Arise_Waterparams*.csv','F:','Select water vapor .csv files directory');
+% [wvdir, fname, ext] = fileparts(wvinfile);
+%  wvdir = [wvdir, filesep];
+%  wv_files = dir([wvdir,'Arise-Waterparams*.csv']);
  
  % in-situ probe data
  % under: F:\ARISE\C-130data\Probes
@@ -99,8 +99,8 @@ airinfile = getfullname__('arise-C130-Hskping_c130_*.ict','F:','Select a met ict
         air.(dates_str).GPS_Altitude  = tmp.GPS_Altitude;%[m]
         air.(dates_str).Pst_Altitude  = tmp.Pressure_Altitude;%[ft]
         air.(dates_str).Static_AirT   = tmp.Static_Air_Temp;%[C]
-        air.(dates_str).poten_Temp    = tmp.Potential_Temp;%[K]
-        air.(dates_str).DewPoint      = tmp.Dew_Point_3Stage;%[C]
+        air.(dates_str).poten_Temp    = tmp.Potential_Temp;%[C]
+        air.(dates_str).DewPoint      = tmp.Dew_Point + 273;%[in C, converted to K]
         air.(dates_str).TotalT        = tmp.Total_Air_Temp;%[C]
         air.(dates_str).IRsurfT       = tmp.IR_Surf_Temp;%[C]
         air.(dates_str).StaticP       = tmp.Static_Pressure;%[mbar]
@@ -115,44 +115,44 @@ airinfile = getfullname__('arise-C130-Hskping_c130_*.ict','F:','Select a met ict
         clear tmp;
         
         % replace ict met data with existing .csv water vapor data
-        wvfname = strcat(wvdir,'Arise_Waterparams_',dates(i),'.csv');
-        if exist(wvfname{:},'file')
-            
-            % use only .ict file (latest archive from Dec-7-2015)
-            
-            tmp =importdata(wvfname{:});   % water vapor data 
-            timeutc = (tmp.data(:,1)/86400)*24;
-            pressure= tmp.data(:,5);
-            sat     = tmp.data(:,6);
-            dewpoint= tmp.data(:,7);
-            partpres= tmp.data(:,8);
-            mmr     = tmp.data(:,9);
-            satPwat = tmp.data(:,10);
-            satPice = tmp.data(:,11);
-            rh      = tmp.data(:,12);
-            
-            if strcmp(dates(i),'20140924')
-                timeutc(2) = timeutc(1) + 0.0001;
-            end
-            
-            air.(dates_str).StaticP      = interp1(timeutc,pressure, air.(dates_str).UTChr);
-            air.(dates_str).SatVPwater   = interp1(timeutc,satPwat , air.(dates_str).UTChr);
-            air.(dates_str).SatVPice     = interp1(timeutc,satPice , air.(dates_str).UTChr);
-            air.(dates_str).DewPoint     = interp1(timeutc,dewpoint, air.(dates_str).UTChr);
-            air.(dates_str).MMR          = interp1(timeutc,mmr     , air.(dates_str).UTChr);
-            air.(dates_str).PartPwater   = interp1(timeutc,partpres, air.(dates_str).UTChr);
-            air.(dates_str).RH           = interp1(timeutc,rh      , air.(dates_str).UTChr);
-            
-            clear tmp;
-        end
+%         wvfname = strcat(wvdir,'Arise_Waterparams_',dates(i),'.csv');
+%         if exist(wvfname{:},'file')
+%             
+%             % use only .ict file (latest archive from Dec-7-2015)
+%             
+%             tmp =importdata(wvfname{:});   % water vapor data 
+%             timeutc = (tmp.data(:,1)/86400)*24;
+%             pressure= tmp.data(:,5);
+%             sat     = tmp.data(:,6);
+%             dewpoint= tmp.data(:,7);
+%             partpres= tmp.data(:,8);
+%             mmr     = tmp.data(:,9);
+%             satPwat = tmp.data(:,10);
+%             satPice = tmp.data(:,11);
+%             rh      = tmp.data(:,12);
+%             
+%             if strcmp(dates(i),'20140924')
+%                 timeutc(2) = timeutc(1) + 0.0001;
+%             end
+%             
+%             air.(dates_str).StaticP      = interp1(timeutc,pressure, air.(dates_str).UTChr);
+%             air.(dates_str).SatVPwater   = interp1(timeutc,satPwat , air.(dates_str).UTChr);
+%             air.(dates_str).SatVPice     = interp1(timeutc,satPice , air.(dates_str).UTChr);
+%             air.(dates_str).DewPoint     = interp1(timeutc,dewpoint, air.(dates_str).UTChr);
+%             air.(dates_str).MMR          = interp1(timeutc,mmr     , air.(dates_str).UTChr);
+%             air.(dates_str).PartPwater   = interp1(timeutc,partpres, air.(dates_str).UTChr);
+%             air.(dates_str).RH           = interp1(timeutc,rh      , air.(dates_str).UTChr);
+%             
+%             clear tmp;
+%         end
         
         tmp=csvread([isdir  is_files(i).name]);          % probes data
         % interpolate params to air time
-        is_params = [5:9 14 18 23 30 35 40 45];%{'TWC_gm3','LWC1_gm3','LWC2_gm3','PWV_cm','LWP_mm','nCDP_cm3','CDP03_dNdlogD','CDP08_dNdlogD','CDP15_dNdlogD','CDP20_dNdlogD','CDP25_dNdlogD','CDP30_dNdlogD'};
-        is_labels = {'TWC_gm3','LWC1_gm3','LWC2_gm3','PWV_cm','LWP_mm','nCDP_cm3','CDP05um',...
-                     'CDP10um','CDP20um','CDP30um','CDP40um','CDP50um'};
-        is_params = [5:9 14 16:45];%{'TWC_gm3','LWC1_gm3','LWC2_gm3','PWV_cm','LWP_mm','nCDP_cm3','CDP03_dNdlogD','CDP08_dNdlogD','CDP15_dNdlogD','CDP20_dNdlogD','CDP25_dNdlogD','CDP30_dNdlogD'};
-        is_labels = {'TWC_gm3','LWC1_gm3','LWC2_gm3','PWV_cm','LWP_mm','nCDP_cm3','CDP03um','CDP04um','CDP05um','CDP06um','CDP07um','CDP08um','CDP09um','CDP10um',...
+        % is_params = [5:9 14 18 23 30 35 40 45];%{'TWC_gm3','LWC1_gm3','LWC2_gm3','PWV_cm','LWP_mm','nCDP_cm3','CDP03_dNdlogD','CDP08_dNdlogD','CDP15_dNdlogD','CDP20_dNdlogD','CDP25_dNdlogD','CDP30_dNdlogD'};
+        % is_labels = {'TWC_gm3','LWC1_gm3','LWC2_gm3','PWV_cm','LWP_mm','nCDP_cm3','CDP05um',...
+        %             'CDP10um','CDP20um','CDP30um','CDP40um','CDP50um'};
+        is_params = [5:39];%{'TWC_gm3','LWC1_gm3','LWC2_gm3','nCDP_cm3','vCDP_um3cm3','CDP03_dNdlogD','CDP08_dNdlogD','CDP15_dNdlogD','CDP20_dNdlogD','CDP25_dNdlogD','CDP30_dNdlogD'};
+        is_labels = {'TWC_gm3','LWC1_gm3','LWC2_gm3','nCDP_cm3','vCDP_cm3','CDP03um','CDP04um','CDP05um','CDP06um','CDP07um','CDP08um','CDP09um','CDP10um',...
                      'CDP11um', 'CDP12um', 'CDP13um', 'CDP14um', 'CDP16um', 'CDP18um', 'CDP20um', 'CDP22um', 'CDP24um','CDP26um','CDP28um',...
                      'CDP30um','CDP32um','CDP34um','CDP36um','CDP38um','CDP40um','CDP42um','CDP44um','CDP46um','CDP48um','CDP50um'};
         %CDP03_dNdlogD% cm-3; 5um
@@ -256,6 +256,9 @@ for i=1:length(air_files)
                 air.(dates_str).(prof_str).WindD =...
                      air.(dates_str).WindD(air.(dates_str).UTChr<=ut2 &...
                                                                      air.(dates_str).UTChr>=ut1);
+                air.(dates_str).(prof_str).IRsurfT =...
+                     air.(dates_str).IRsurfT(air.(dates_str).UTChr<=ut2 &...
+                                                                     air.(dates_str).UTChr>=ut1);                                                                                                                 
                 air.(dates_str).(prof_str).starStr =...
                      air.(dates_str).starStr(air.(dates_str).UTChr<=ut2 &...
                                                                      air.(dates_str).UTChr>=ut1);
@@ -380,15 +383,15 @@ for i=1:length(air_files)
 end
 
 %% save movies
-movie2avi(Tempmov, 'ARISEmeanTempprof.avi', 'compression','None', 'fps',1);
-winopen('ARISEmeanTempprof.avi');
-movie2avi(RHmov, 'ARISEmeanRHprof.avi', 'compression','None', 'fps',1);
-winopen('ARISEmeanRHprof.avi');
+movie2avi(Tempmov, ['ARISEmeanTempprof_' datestr(now,'yyyy-mm-dd') '.avi'], 'compression','None', 'fps',1);
+winopen(['ARISEmeanTempprof_' datestr(now,'yyyy-mm-dd') '.avi']);
+movie2avi(RHmov,   ['ARISEmeanRHprof_' datestr(now,'yyyy-mm-dd') '.avi']  , 'compression','None', 'fps',1);
+winopen( ['ARISEmeanRHprof_' datestr(now,'yyyy-mm-dd') '.avi']);
 
 %% save processed air struct for all flights
-disp(strcat('saving',airdir,'ARISEairprocessed_with_insitu_withWVparams.mat'));
+disp(strcat('saving',airdir,'ARISEairprocessed_' ,datestr(now,'yyyy-mm-dd')));
 %airdir='F:\ARISE\C-130data\Met\SeaIceProfiles\';
-save([airdir,'ARISEairprocessed_with_insitu_withWVparams20150921.mat'],'-struct','air');
+save([airdir,'ARISEairprocessed_' datestr(now,'yyyy-mm-dd')],'-struct','air');
 return;
 
 

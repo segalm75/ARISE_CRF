@@ -49,6 +49,7 @@
 %                 genAirCloudProf
 % MS, 2015-10-12, corrected a bug in generating Reff and WC/IC in
 %                 consolidated clouds section
+% MS, 2015-12-29, corrected a bug in generating cloud file for R plotting
 % ---------------------------------------------------------------------------
 %% function routine
 function [c] = genAirCloudProf(prof,dprof,allprof,daystr,doy)
@@ -640,21 +641,36 @@ end
            disp( ['Writing to file: ' filen]);
            prof.iceconc = prof.iceconc_mean;
            
-           for i=1:c.cldnum
-                   
-%                    line=[{'date ' daystr ' profilenum ' num2str(dprof) ' DOY ' doy ' sza ' num2str(sza) ' lat ' num2str(lat) ' lon ' num2str(lon) ...
-%                           ' ice_conc ' num2str(round(prof.iceconc)) ' platform_low_alt ' num2str(c.c130sur_alt) ...
-%                           ' numclouds ' num2str(c.cldnum) ' cloudabove ' num2str(c.cldabove) ' cloudbelow ' num2str(c.cldbelow) ' cloudtop ' num2str(cldtop(i)/1000)...
-%                           ' cloudbot '  num2str(cldbot(i)/1000) ' cloudthick ' num2str(cldthick(i)/1000) ' cloudreff ' num2str(cldreff(i))  ' cloudphase ' num2str(cldphase(i))...
-%                           ' cloudwc '   num2str(cldwc(i)) '  '}];
+           if c.cldnum>0
+                   % write parameters to file 
+                   for i=1:c.cldnum
 
+        %                    line=[{'date ' daystr ' profilenum ' num2str(dprof) ' DOY ' doy ' sza ' num2str(sza) ' lat ' num2str(lat) ' lon ' num2str(lon) ...
+        %                           ' ice_conc ' num2str(round(prof.iceconc)) ' platform_low_alt ' num2str(c.c130sur_alt) ...
+        %                           ' numclouds ' num2str(c.cldnum) ' cloudabove ' num2str(c.cldabove) ' cloudbelow ' num2str(c.cldbelow) ' cloudtop ' num2str(cldtop(i)/1000)...
+        %                           ' cloudbot '  num2str(cldbot(i)/1000) ' cloudthick ' num2str(cldthick(i)/1000) ' cloudreff ' num2str(cldreff(i))  ' cloudphase ' num2str(cldphase(i))...
+        %                           ' cloudwc '   num2str(cldwc(i)) '  '}];
+
+                       line=[{daystr ' ' num2str(dprof) ' ' doy ' ' num2str(sza) ' ' num2str(lat) ' ' num2str(lon) ' ' num2str(round(prof.iceconc)) ' ' num2str(c.c130sur_alt) ...
+                                  ' ' num2str(c.cldnum) ' ' num2str(c.cldabove) ' ' num2str(c.cldbelow) ' ' num2str(cldtop(i)/1000) ' ' num2str(cldbot(i)/1000) ' ' num2str(cldthick(i)/1000) ...
+                                  ' ' num2str(cldreff(i))  ' ' num2str(cldphase(i)) ' ' num2str(cldwc(i)) ' ' num2str(c.cldic(i))}];
+
+                       dlmwrite(filen,line,'-append','delimiter','');
+
+                       clear line;
+                   end
+           else
+                    %write dummy parameters to file (to maintain same number of
+                    %profiles
                     line=[{daystr ' ' num2str(dprof) ' ' doy ' ' num2str(sza) ' ' num2str(lat) ' ' num2str(lon) ' ' num2str(round(prof.iceconc)) ' ' num2str(c.c130sur_alt) ...
-                          ' ' num2str(c.cldnum) ' ' num2str(c.cldabove) ' ' num2str(c.cldbelow) ' ' num2str(cldtop(i)/1000) ' ' num2str(cldbot(i)/1000) ' ' num2str(cldthick(i)/1000) ...
-                          ' ' num2str(cldreff(i))  ' ' num2str(cldphase(i)) ' ' num2str(cldwc(i)) ' ' num2str(c.cldic(i))}];
+                                  ' ' num2str(c.cldnum) ' ' num2str(c.cldabove) ' ' num2str(c.cldbelow) ' ' 'NA' ' ' 'NA' ' ' 'NA' ...
+                                  ' ' 'NA'  ' ' 'NA' ' ' 'NA' ' ' 'NA'}];
 
-               dlmwrite(filen,line,'-append','delimiter','');
+                     dlmwrite(filen,line,'-append','delimiter','');
 
-               clear line;
+                     clear line;
+                    
+               
            end
            
            %% write cloud params to file for RT
